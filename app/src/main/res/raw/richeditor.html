@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <meta
+                name="viewport"
+                content="width=device-width, initial-scale=1.0">
+        <title>Rich Text Editor</title>
+        <style>
+            body {
+                margin: 0;
+                padding: 10px;
+                font-family: Calibri, Arial, sans-serif;
+                font-size: 14px;
+                line-height: 1.6;
+                background-color: #ffffff;
+            }
+
+            #editor {
+                min-height: 300px;
+                border: 1px solid #ddd;
+                padding: 15px;
+                outline: none;
+                background: white;
+                overflow-y: auto;
+                border-radius: 4px;
+            }
+
+
+            table {
+                border-collapse: collapse;
+                width: 100%;
+                margin: 15px 0;
+                background-color: white;
+            }
+
+            table, th, td {
+                border: 1px solid #333;
+            }
+
+            th, td {
+                padding: 8px 12px;
+                text-align: left;
+                vertical-align: top;
+                min-width: 50px;
+                min-height: 20px;
+            }
+
+            th {
+                background-color: #f5f5f5;
+                font-weight: bold;
+            }
+
+
+            .bold { font-weight: bold; }
+            .italic { font-style: italic; }
+            .underline { text-decoration: underline; }
+
+
+            p {
+                margin: 8px 0;
+                min-height: 1.2em;
+            }
+
+            h1 {
+                font-size: 24px;
+                margin: 16px 0 12px 0;
+                font-weight: bold;
+            }
+            h2 {
+                font-size: 20px;
+                margin: 14px 0 10px 0;
+                font-weight: bold;
+            }
+            h3 {
+                font-size: 16px;
+                margin: 12px 0 8px 0;
+                font-weight: bold;
+            }
+
+
+            ul, ol {
+                margin: 10px 0;
+                padding-left: 30px;
+            }
+
+            li {
+                margin: 4px 0;
+            }
+
+
+            .placeholder {
+                color: #999;
+                font-style: italic;
+            }
+
+
+            td:empty::before {
+                content: '\00a0'; /* Non-breaking space */
+                color: transparent;
+            }
+            img {
+    max-width: 100%;
+    height: auto;
+    margin: 10px 0;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+img:hover {
+    border-color: #1976D2;
+    box-shadow: 0 2px 8px rgba(25, 118, 210, 0.3);
+}
+        </style>
+    </head>
+    <body>
+        <div
+                id="editor"
+                contenteditable="true"
+                spellcheck="false">
+            <p class="placeholder">Buraya yazmaya başlayın...</p>
+        </div>
+
+        <script>
+            let editor = document.getElementById('editor');
+            let isPlaceholderVisible = true;
+
+
+            function setHtml(html) {
+                console.log('setHtml çağrıldı:', html.substring(0, 100));
+
+                if (!html || html.trim() === '' || html === '<p><br></p>') {
+                    showPlaceholder();
+                    return;
+                }
+
+
+                let cleanHtml = normalizeHtml(html);
+                editor.innerHTML = cleanHtml;
+                hidePlaceholder();
+
+                console.log('Editöre yüklenen HTML:', editor.innerHTML.substring(0, 100));
+            }
+
+            function getHtml() {
+                if (isPlaceholderVisible) {
+                    return '<p><br></p>';
+                }
+
+                let html = editor.innerHTML;
+
+                // Boş içerik kontrolü
+                let textContent = editor.innerText || editor.textContent || '';
+                if (textContent.trim() === '') {
+                    return '<p><br></p>';
+                }
+
+                console.log('getHtml döndürülen:', html.substring(0, 100));
+                return html;
+            }
+
+            function getText() {
+                if (isPlaceholderVisible) {
+                    return '';
+                }
+                return editor.innerText || editor.textContent || '';
+            }
+
+            // HTML normalizing fonksiyonu
+            function normalizeHtml(html) {
+                if (!html) return '<p><br></p>';
+
+                // HTML entity'leri decode et
+                let decoded = html
+                    .replace(/&nbsp;/g, ' ')
+                    .replace(/&amp;/g, '&')
+                    .replace(/&lt;/g, '<')
+                    .replace(/&gt;/g, '>')
+                    .replace(/&quot;/g, '"')
+                    .replace(/&#39;/g, "'");
+
+                // Eğer HTML tag'ları yoksa, düz metin olarak işle
+                if (!decoded.includes('<')) {
+                    let lines = decoded.split('\n');
+                    let htmlLines = lines.map(line =>
+                        line.trim() === '' ? '<p><br></p>' : `<p>${escapeHtml(line)}</p>`
+                    );
+                    return htmlLines.join('');
+                }
+
+                return decoded;
+            }
+
+            // HTML escape fonksiyonu
+            function escapeHtml(text) {
+                let div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            // Placeholder yönetimi
+            function showPlaceholder() {
+                editor.innerHTML = '<p class="placeholder">Buraya yazmaya başlayın...</p>';
+                isPlaceholderVisible = true;
+            }
+
+            function hidePlaceholder() {
+                if (isPlaceholderVisible) {
+                    let placeholder = editor.querySelector('.placeholder');
+                    if (placeholder) {
+                        editor.innerHTML = '<p><br></p>';
+                    }
+                    isPlaceholderVisible = false;
+                }
+            }
+
+            // Format fonksiyonları
+            function setBold() {
+                hidePlaceholder();
+                document.execCommand('bold', false, null);
+                editor.focus();
+                notifyContentChange();
+            }
+
+            function setItalic() {
+                hidePlaceholder();
+                document.execCommand('italic', false, null);
+                editor.focus();
+                notifyContentChange();
+            }
+
+            function setUnderline() {
+                hidePlaceholder();
+                document.execCommand('underline', false, null);
+                editor.focus();
+                notifyContentChange();
+            }
+
+            function setTextColor(color) {
+                hidePlaceholder();
+                document.execCommand('foreColor', false, color);
+                editor.focus();
+                notifyContentChange();
+            }
+
+            function setBackgroundColor(color) {
+                hidePlaceholder();
+                document.execCommand('backColor', false, color);
+                editor.focus();
+                notifyContentChange();
+            }
+
+            function setFontSize(size) {
+                hidePlaceholder();
+                document.execCommand('fontSize', false, size);
+                editor.focus();
+                notifyContentChange();
+            }
+
+            function setFontName(name) {
+                hidePlaceholder();
+                document.execCommand('fontName', false, name);
+                editor.focus();
+                notifyContentChange();
+            }
+
+            // Hizalama fonksiyonları
+            function setAlignLeft() {
+                hidePlaceholder();
+                document.execCommand('justifyLeft', false, null);
+                editor.focus();
+                notifyContentChange();
+            }
+
+            function setAlignCenter() {
+                hidePlaceholder();
+                document.execCommand('justifyCenter', false, null);
+                editor.focus();
+                notifyContentChange();
+            }
+
+            function setAlignRight() {
+                hidePlaceholder();
+                document.execCommand('justifyRight', false, null);
+                editor.focus();
+                notifyContentChange();
+            }
+
+            // Liste fonksiyonları
+            function setOrderedList() {
+                hidePlaceholder();
+                document.execCommand('insertOrderedList', false, null);
+                editor.focus();
+                notifyContentChange();
+            }
+
+            function setUnorderedList() {
+                hidePlaceholder();
+                document.execCommand('insertUnorderedList', false, null);
+                editor.focus();
+                notifyContentChange();
+            }
+
+            // Tablo ekleme
+            function insertTable(rows, cols) {
+                hidePlaceholder();
+
+                console.log('Tablo oluşturuluyor:', rows + 'x' + cols);
+
+                let tableHtml = '<table border="1" style="border-collapse: collapse; width: 100%; margin: 10px 0;">';
+
+                for (let i = 0; i < rows; i++) {
+                    tableHtml += '<tr>';
+                    for (let j = 0; j < cols; j++) {
+                        tableHtml += '<td style="padding: 8px; border: 1px solid #333; min-width: 80px; min-height: 25px;">';
+                        tableHtml += 'Hücre ' + (i + 1) + '-' + (j + 1);
+                        tableHtml += '</td>';
+                    }
+                    tableHtml += '</tr>';
+                }
+                tableHtml += '</table>';
+                tableHtml += '<p><br></p>'; // Tablo sonrası boş paragraf
+
+                // İmleci kontrol et
+                let selection = window.getSelection();
+                if (selection.rangeCount > 0) {
+                    let range = selection.getRangeAt(0);
+                    range.deleteContents();
+
+                    let tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = tableHtml;
+
+                    while (tempDiv.firstChild) {
+                        range.insertNode(tempDiv.firstChild);
+                    }
+                } else {
+                    // Fallback: Sona ekle
+                    editor.innerHTML += tableHtml;
+                }
+
+                editor.focus();
+                notifyContentChange();
+
+                console.log('Tablo eklendi');
+            }
+
+            function insertHtml(html) {
+                hidePlaceholder();
+                document.execCommand('insertHTML', false, html);
+                editor.focus();
+                notifyContentChange();
+            }
+
+            // Geri al/İleri al
+            function undo() {
+                document.execCommand('undo', false, null);
+                checkPlaceholder();
+                editor.focus();
+                notifyContentChange();
+            }
+
+            function redo() {
+                document.execCommand('redo', false, null);
+                editor.focus();
+                notifyContentChange();
+            }
+
+            function selectAll() {
+                if (!isPlaceholderVisible) {
+                    document.execCommand('selectAll', false, null);
+                }
+            }
+
+            function removeFormat() {
+                hidePlaceholder();
+                document.execCommand('removeFormat', false, null);
+                editor.focus();
+                notifyContentChange();
+            }
+
+            // İçerik değişikliği bildirimi
+            function notifyContentChange() {
+                if (window.Android && window.Android.onTextChanged) {
+                    let html = getHtml();
+                    window.Android.onTextChanged(html);
+                }
+            }
+
+            // Placeholder kontrolü
+            function checkPlaceholder() {
+                let textContent = editor.innerText || editor.textContent || '';
+                let htmlContent = editor.innerHTML || '';
+
+                if (textContent.trim() === '' || htmlContent.trim() === '<p><br></p>' || htmlContent.trim() === '') {
+                    showPlaceholder();
+                } else if (isPlaceholderVisible && textContent.trim() !== 'Buraya yazmaya başlayın...') {
+                    hidePlaceholder();
+                }
+            }
+
+            // Event listeners
+            editor.addEventListener('input', function(e) {
+                console.log('Input event:', e.inputType);
+                checkPlaceholder();
+
+                // Biraz gecikme ile değişikliği bildir
+                setTimeout(() => {
+                    notifyContentChange();
+                }, 100);
+            });
+
+            editor.addEventListener('keydown', function(e) {
+                // Enter tuşu ile placeholder'ı gizle
+                if (e.key === 'Enter' && isPlaceholderVisible) {
+                    e.preventDefault();
+                    hidePlaceholder();
+                    // Yeni paragraf ekle
+                    document.execCommand('insertHTML', false, '<p><br></p>');
+                    return;
+                }
+
+                // Backspace ile içerik boşalırsa placeholder göster
+                if (e.key === 'Backspace') {
+                    setTimeout(checkPlaceholder, 10);
+                }
+
+                // Herhangi bir tuş ile placeholder'ı gizle
+                if (isPlaceholderVisible && e.key.length === 1) {
+                    hidePlaceholder();
+                }
+            });
+
+            editor.addEventListener('paste', function(e) {
+                console.log('Paste event');
+                hidePlaceholder();
+
+                // Paste sonrası içeriği kontrol et
+                setTimeout(() => {
+                    checkPlaceholder();
+                    notifyContentChange();
+                }, 100);
+            });
+
+            editor.addEventListener('focus', function() {
+                console.log('Focus event, placeholder visible:', isPlaceholderVisible);
+
+                if (window.Android && window.Android.onFocus) {
+                    window.Android.onFocus();
+                }
+
+                // Focus olduğunda placeholder'ı seç
+                if (isPlaceholderVisible) {
+                    let placeholder = editor.querySelector('.placeholder');
+                    if (placeholder) {
+                        let range = document.createRange();
+                        range.selectNodeContents(placeholder);
+                        let selection = window.getSelection();
+                        selection.removeAllRanges();
+                        selection.addRange(range);
+                    }
+                }
+            });
+
+            editor.addEventListener('blur', function() {
+                console.log('Blur event');
+
+                if (window.Android && window.Android.onBlur) {
+                    window.Android.onBlur();
+                }
+
+                checkPlaceholder();
+            });
+
+            // Tablo hücreleri için özel event listener
+            editor.addEventListener('click', function(e) {
+                if (e.target.tagName === 'TD' || e.target.tagName === 'TH') {
+                    e.target.focus();
+                }
+            });
+
+            // Sayfa yüklendiğinde
+            window.onload = function() {
+                console.log('Editör yüklendi');
+                showPlaceholder();
+                editor.focus();
+
+                // İlk yüklemede Android'e bildir
+                setTimeout(() => {
+                    if (window.Android && window.Android.onTextChanged) {
+                        window.Android.onTextChanged(getHtml());
+                    }
+                }, 500);
+            };
+// Resim yükleme fonksiyonu
+function insertImage(base64Data, mimeType) {
+    hidePlaceholder();
+
+    if (!base64Data || !mimeType) {
+        console.error('Geçersiz resim verisi');
+        return;
+    }
+
+    let imgHtml = '<img src="data:' + mimeType + ';base64,' + base64Data + '" ' +
+                  'style="max-width: 100%; height: auto; margin: 10px 0;" ' +
+                  'alt="Belge Resmi" />';
+
+    document.execCommand('insertHTML', false, imgHtml);
+    editor.focus();
+    notifyContentChange();
+
+    console.log('Resim editöre eklendi');
+}
+
+// Resim boyutlandırma
+function resizeImage(element, width, height) {
+    if (element && element.tagName === 'IMG') {
+        if (width) element.style.width = width + 'px';
+        if (height) element.style.height = height + 'px';
+        notifyContentChange();
+    }
+}
+
+// Resim tıklama olayı
+editor.addEventListener('click', function(e) {
+    if (e.target.tagName === 'IMG') {
+        e.target.style.border = '2px solid #1976D2';
+
+        // 3 saniye sonra border'ı kaldır
+        setTimeout(() => {
+            e.target.style.border = '1px solid #ddd';
+        }, 3000);
+
+        console.log('Resim seçildi:', e.target.src.substring(0, 50) + '...');
+    }
+});
+
+// Resim silme
+editor.addEventListener('keydown', function(e) {
+    if ((e.key === 'Delete' || e.key === 'Backspace')) {
+        let selection = window.getSelection();
+        if (selection.rangeCount > 0) {
+            let range = selection.getRangeAt(0);
+            let container = range.commonAncestorContainer;
+
+            // Eğer seçili element resim ise
+            if (container.nodeType === Node.ELEMENT_NODE) {
+                let img = container.querySelector('img');
+                if (img) {
+                    img.remove();
+                    notifyContentChange();
+                    e.preventDefault();
+                }
+            }
+        }
+    }
+});
+// Gelişmiş HTML alma - resimlerle birlikte
+function getHtmlWithImages() {
+    if (isPlaceholderVisible) {
+        return '<p><br></p>';
+    }
+
+    let html = editor.innerHTML;
+
+    // Boş içerik kontrolü
+    let textContent = editor.innerText || editor.textContent || '';
+    if (textContent.trim() === '') {
+        return '<p><br></p>';
+    }
+
+    // Resimleri kontrol et ve temizle
+    html = cleanImagesInHtml(html);
+
+    console.log('getHtmlWithImages döndürülen - uzunluk:', html.length);
+    console.log('Resim sayısı:', (html.match(/<img[^>]*>/g) || []).length);
+
+    return html;
+}
+
+// HTML'deki resimleri temizler ve doğrular
+function cleanImagesInHtml(html) {
+    // Bozuk Base64 resimlerini düzelt
+    html = html.replace(/<img[^>]*src="data:image\/[^;]+;base64,([^"]*)"[^>]*>/g, function(match, base64) {
+        try {
+            // Base64'ü temizle
+            let cleanBase64 = base64.replace(/\s+/g, '').replace(/[^A-Za-z0-9+/=]/g, '');
+
+            // Padding ekle gerekirse
+            while (cleanBase64.length % 4 !== 0) {
+                cleanBase64 += '=';
+            }
+
+            // Test decode (hata varsa placeholder döndür)
+            atob(cleanBase64);
+
+            return match.replace(base64, cleanBase64);
+        } catch (e) {
+            console.error('Bozuk Base64 resim bulundu, placeholder ile değiştiriliyor:', e);
+            return '<p style="color: red; text-align: center;">[Bozuk resim - ' + e.message + ']</p>';
+        }
+    });
+
+    return html;
+}
+
+// Resim ekleme
+function insertImageAdvanced(base64Data, mimeType, fileName) {
+    hidePlaceholder();
+
+    if (!base64Data || !mimeType) {
+        console.error('Geçersiz resim verisi');
+        insertText('[Resim yüklenemedi - geçersiz veri]');
+        return false;
+    }
+
+    try {
+        // Base64 doğrulama
+        let cleanBase64 = base64Data.replace(/\s+/g, '').replace(/[^A-Za-z0-9+/=]/g, '');
+        atob(cleanBase64);
+
+        let imgHtml = '<img src="data:' + mimeType + ';base64,' + cleanBase64 + '" ' +
+                      'style="max-width: 100%; height: auto; margin: 10px 0; border: 1px solid #ddd;" ' +
+                      'alt="' + (fileName || 'Belge Resmi') + '" ' +
+                      'title="' + (fileName || 'Belge Resmi') + '" ' +
+                      'data-image-name="' + (fileName || 'image') + '" />';
+
+        // İmleci kontrol et ve resmi ekle
+        let selection = window.getSelection();
+        if (selection.rangeCount > 0) {
+            let range = selection.getRangeAt(0);
+            range.deleteContents();
+
+            let tempDiv = document.createElement('div');
+            tempDiv.innerHTML = imgHtml + '<p><br></p>'; // Resim sonrası boş paragraf
+
+            while (tempDiv.firstChild) {
+                range.insertNode(tempDiv.firstChild);
+            }
+        } else {
+            // Fallback: sona ekle
+            editor.innerHTML += imgHtml + '<p><br></p>';
+        }
+
+        editor.focus();
+        notifyContentChange();
+
+        console.log('✅ Resim başarıyla eklendi:', fileName);
+        return true;
+
+    } catch (e) {
+        console.error('❌ Resim ekleme hatası:', e);
+        insertText('[Resim ekleme hatası: ' + e.message + ']');
+        return false;
+    }
+}
+
+// Seçili resmi sil
+function deleteSelectedImage() {
+    let selection = window.getSelection();
+    if (selection.rangeCount > 0) {
+        let range = selection.getRangeAt(0);
+        let container = range.commonAncestorContainer;
+
+        // Seçili element veya parent'ında resim var mı?
+        let imgElement = null;
+        if (container.nodeType === Node.ELEMENT_NODE && container.tagName === 'IMG') {
+            imgElement = container;
+        } else if (container.nodeType === Node.ELEMENT_NODE) {
+            imgElement = container.querySelector('img');
+        } else if (container.parentNode && container.parentNode.tagName === 'IMG') {
+            imgElement = container.parentNode;
+        }
+
+        if (imgElement) {
+            let imageName = imgElement.getAttribute('data-image-name') || 'Resim';
+
+            // Onay iste
+            if (confirm('Bu resmi silmek istediğinizden emin misiniz?\n(' + imageName + ')')) {
+                imgElement.remove();
+                notifyContentChange();
+                console.log('🗑️ Resim silindi:', imageName);
+                return true;
+            }
+        } else {
+            console.log('ℹ️ Silinecek resim bulunamadı');
+        }
+    }
+    return false;
+}
+
+// Tüm resimleri listele
+function getAllImages() {
+    let images = editor.querySelectorAll('img');
+    let imageList = [];
+
+    images.forEach((img, index) => {
+        imageList.push({
+            index: index,
+            src: img.src.substring(0, 50) + '...',
+            alt: img.alt || 'Adsız resim',
+            name: img.getAttribute('data-image-name') || 'image_' + index,
+            width: img.offsetWidth,
+            height: img.offsetHeight
+        });
+    });
+
+    console.log('📊 Editördeki resimler:', imageList);
+    return imageList;
+}
+
+// Resim boyutlandırma
+function resizeSelectedImage(width, height) {
+    let selection = window.getSelection();
+    if (selection.rangeCount > 0) {
+        let range = selection.getRangeAt(0);
+        let container = range.commonAncestorContainer;
+
+        let imgElement = null;
+        if (container.nodeType === Node.ELEMENT_NODE && container.tagName === 'IMG') {
+            imgElement = container;
+        } else if (container.nodeType === Node.ELEMENT_NODE) {
+            imgElement = container.querySelector('img');
+        }
+
+        if (imgElement) {
+            if (width) imgElement.style.width = width + 'px';
+            if (height) imgElement.style.height = height + 'px';
+
+            notifyContentChange();
+            console.log('📐 Resim boyutlandırıldı:', width + 'x' + height);
+            return true;
+        }
+    }
+    return false;
+}
+
+// Gelişmiş resim seçimi ve highlight
+let selectedImage = null;
+
+editor.addEventListener('click', function(e) {
+    // Önceki seçimi temizle
+    if (selectedImage) {
+        selectedImage.style.border = '1px solid #ddd';
+        selectedImage = null;
+    }
+
+    if (e.target.tagName === 'IMG') {
+        selectedImage = e.target;
+        selectedImage.style.border = '3px solid #1976D2';
+        selectedImage.style.boxShadow = '0 0 10px rgba(25, 118, 210, 0.5)';
+
+        console.log('🖼️ Resim seçildi:', selectedImage.getAttribute('data-image-name'));
+
+        // Android'e bildir (eğer callback varsa)
+        if (window.Android && window.Android.onImageSelected) {
+            window.Android.onImageSelected(selectedImage.getAttribute('data-image-name') || 'Adsız resim');
+        }
+    }
+});
+
+// Gelişmiş klavye shortcut'ları
+editor.addEventListener('keydown', function(e) {
+    // Delete/Backspace ile seçili resmi sil
+    if ((e.key === 'Delete' || e.key === 'Backspace') && selectedImage) {
+        e.preventDefault();
+
+        let imageName = selectedImage.getAttribute('data-image-name') || 'Resim';
+        selectedImage.remove();
+        selectedImage = null;
+
+        notifyContentChange();
+        console.log('🗑️ Klavye ile resim silindi:', imageName);
+        return;
+    }
+
+    // Ctrl+Alt+I ile resim bilgileri
+    if (e.ctrlKey && e.altKey && e.key === 'i') {
+        e.preventDefault();
+        let imageList = getAllImages();
+        alert('Editörde ' + imageList.length + ' resim bulunuyor:\n' +
+              imageList.map(img => '• ' + img.name + ' (' + img.width + 'x' + img.height + ')').join('\n'));
+    }
+});
+
+// Resim yükleme durumu kontrolü
+function validateImageIntegrity() {
+    let images = editor.querySelectorAll('img');
+    let validImages = 0;
+    let invalidImages = 0;
+
+    images.forEach((img, index) => {
+        try {
+            if (img.src.startsWith('data:image/')) {
+                let base64Part = img.src.split(',')[1];
+                atob(base64Part); // Test decode
+                validImages++;
+            } else {
+                invalidImages++;
+            }
+        } catch (e) {
+            console.error('❌ Geçersiz resim bulundu:', index, e);
+            img.style.border = '2px solid red';
+            img.title = 'Geçersiz resim: ' + e.message;
+            invalidImages++;
+        }
+    });
+
+    console.log('📊 Resim durumu - Geçerli:', validImages, 'Geçersiz:', invalidImages);
+    return { valid: validImages, invalid: invalidImages };
+}
+
+// Editör başlatıldığında resim doğrulaması yap
+window.addEventListener('load', function() {
+    setTimeout(() => {
+        validateImageIntegrity();
+    }, 1000);
+});
+
+// Format koruma için gelişmiş getHtml
+function getHtmlWithFormats() {
+    if (isPlaceholderVisible) {
+        return '<p><br></p>';
+    }
+
+    let html = editor.innerHTML;
+
+    // Formatları koruyarak temizle
+    html = preserveFormatsInHtml(html);
+
+    return html;
+}
+
+// HTML formatlarını korur
+function preserveFormatsInHtml(html) {
+    // Inline style'ları span tag'larına çevir
+    html = html.replace(/style="([^"]*)"/g, function(match, styles) {
+        return 'style="' + styles + '"';
+    });
+
+    // Font ailesi, boyut ve renk bilgilerini koru
+    html = html.replace(/<font[^>]*>(.*?)<\/font>/gi, function(match, content) {
+        // Font tag'larını span'a çevir (eski format desteği)
+        return '<span>' + content + '</span>';
+    });
+
+    return html;
+}
+
+// Android'den çağrılacak yeni fonksiyonlar
+function insertImageFromAndroid(base64Data, mimeType, fileName) {
+    return insertImageAdvanced(base64Data, mimeType, fileName);
+}
+
+function deleteSelectedImageFromAndroid() {
+    return deleteSelectedImage();
+}
+
+function getImageCountFromAndroid() {
+    return editor.querySelectorAll('img').length;
+}
+
+function validateImagesFromAndroid() {
+    return validateImageIntegrity();
+}
+// Debug: Resim sayısını kontrol et
+function getImageCount() {
+    let images = editor.querySelectorAll('img');
+    console.log('Editördeki resim sayısı:', images.length);
+    return images.length;
+}
+            // Debug fonksiyonları
+            function debugEditor() {
+                console.log('=== EDITOR DEBUG ===');
+                console.log('innerHTML:', editor.innerHTML);
+                console.log('innerText:', editor.innerText);
+                console.log('isPlaceholderVisible:', isPlaceholderVisible);
+                console.log('getHtml():', getHtml());
+                console.log('==================');
+            }
+
+            // Global debug erişimi
+            window.debugEditor = debugEditor;
+
+            // Keyboard shortcuts
+            editor.addEventListener('keydown', function(e) {
+                if (e.ctrlKey || e.metaKey) {
+                    switch(e.key) {
+                        case 'b':
+                            e.preventDefault();
+                            setBold();
+                            break;
+                        case 'i':
+                            e.preventDefault();
+                            setItalic();
+                            break;
+                        case 'u':
+                            e.preventDefault();
+                            setUnderline();
+                            break;
+                        case 'z':
+                            if (e.shiftKey) {
+                                e.preventDefault();
+                                redo();
+                            } else {
+                                e.preventDefault();
+                                undo();
+                            }
+                            break;
+                        case 'a':
+                            e.preventDefault();
+                            selectAll();
+                            break;
+                    }
+                }
+            });
+        </script>
+    </body>
+</html>
