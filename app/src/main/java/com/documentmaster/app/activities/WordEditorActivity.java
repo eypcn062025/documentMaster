@@ -1,17 +1,13 @@
 package com.documentmaster.app.activities;
 
 import android.content.Intent;
-import android.graphics.Color;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
-import android.webkit.JavascriptInterface;
-import android.webkit.WebSettings;
 import android.webkit.WebView;
-import android.webkit.WebViewClient;
 import android.widget.EditText;
 import android.widget.ProgressBar;
 import android.widget.Toast;
@@ -23,7 +19,14 @@ import androidx.appcompat.widget.Toolbar;
 
 import com.documentmaster.app.BaseActivity;
 import com.documentmaster.app.R;
+import com.documentmaster.app.image.ImageManager;
+import com.documentmaster.app.image.ImageProcessor;
+import com.documentmaster.app.utils.FileUtils;
+import com.documentmaster.app.utils.HtmlUtils;
 import com.documentmaster.app.utils.WordDocumentHelper;
+import com.documentmaster.app.web.WebAppCallback;
+import com.documentmaster.app.web.WebViewBridge;
+import com.documentmaster.app.web.WebViewManager;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
@@ -33,19 +36,19 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import android.content.Intent;
+
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.provider.MediaStore;
-import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
 
-public class WordEditorActivity extends BaseActivity {
+public class WordEditorActivity extends BaseActivity implements WebAppCallback, ImageManager.ImageOperationCallback {
 
     // UI Components
     private Toolbar toolbar;
     private WebView webView;
+    private WebViewManager webViewManager;
+    private WebViewBridge webViewBridge;
     private MaterialButton btnSave, btnSaveAs, btnFormat, btnFont, btnInsertTable;
     private ProgressBar progressBar;
 
@@ -73,11 +76,9 @@ public class WordEditorActivity extends BaseActivity {
     // Constants
     public static final String EXTRA_FILE_PATH = "extra_file_path";
     public static final String EXTRA_IS_NEW_DOCUMENT = "extra_is_new_document";
-    private static final int PICK_IMAGE_REQUEST = 2001;
-    private static final int CAPTURE_IMAGE_REQUEST = 2002;
-
 
     private MaterialButton btnInsertImage, btnDeleteImage, btnImageInfo;
+    private ImageManager imageManager;
 
 
     @Override
@@ -87,7 +88,17 @@ public class WordEditorActivity extends BaseActivity {
 
         initViews();
         setupToolbar();
-        setupWebView();
+        webViewManager = new WebViewManager(this, webView);
+        webViewBridge = new WebViewBridge(webView);
+        imageManager = new ImageManager(this, webViewBridge);
+        imageManager.setCallback(this);
+        webViewManager.setup(() -> {
+            webViewBridge.setEditorLoaded(true);
+            isWebViewLoaded=true;
+            if (!TextUtils.isEmpty(originalContent)) {
+                webViewBridge.setHtml(originalContent);
+            }
+        });
         setupFormattingToolbar();
         setupListeners();
 
@@ -105,7 +116,6 @@ public class WordEditorActivity extends BaseActivity {
         btnInsertTable = findViewById(R.id.btnInsertTable);
         progressBar = findViewById(R.id.progressBar);
 
-        // Formatting toolbar
         formattingToolbar = findViewById(R.id.formattingToolbar);
         btnBold = findViewById(R.id.btnBold);
         btnItalic = findViewById(R.id.btnItalic);
@@ -119,7 +129,7 @@ public class WordEditorActivity extends BaseActivity {
         btnUnorderedList = findViewById(R.id.btnUnorderedList);
         btnUndo = findViewById(R.id.btnUndo);
         btnRedo = findViewById(R.id.btnRedo);
-        // Resim butonları
+
         btnInsertImage = findViewById(R.id.btnInsertImage);
         btnDeleteImage = findViewById(R.id.btnDeleteImage);
         btnImageInfo = findViewById(R.id.btnImageInfo);
@@ -133,76 +143,21 @@ public class WordEditorActivity extends BaseActivity {
         }
     }
 
-    private void setupWebView() {
-        WebSettings webSettings = webView.getSettings();
-        webSettings.setJavaScriptEnabled(true);
-        webSettings.setDomStorageEnabled(false);
-        webSettings.setAllowFileAccess(true);
-        webSettings.setAllowContentAccess(true);
-        webSettings.setLoadWithOverviewMode(true);
-        webSettings.setUseWideViewPort(true);
-        webSettings.setBuiltInZoomControls(false);
-        webSettings.setDisplayZoomControls(false);
-
-        webView.addJavascriptInterface(new WebAppInterface(), "Android");
-
-        webView.setWebViewClient(new WebViewClient() {
-            @Override
-            public void onPageFinished(WebView view, String url) {
-                super.onPageFinished(view, url);
-                isWebViewLoaded = true;
-
-                if (!TextUtils.isEmpty(originalContent)) {
-                    setEditorContent(originalContent);
-                }
-            }
-
-            @Override
-            public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                return false; // Tüm URL'leri WebView içinde handle et
-            }
-        });
-
-        loadLocalHtml();
-    }
-
-    private void loadLocalHtml() {
-        try {
-            InputStream inputStream = getResources().openRawResource(R.raw.richeditor);
-            byte[] buffer = new byte[inputStream.available()];
-            inputStream.read(buffer);
-            inputStream.close();
-
-            String htmlContent = new String(buffer);
-            webView.loadDataWithBaseURL("file:///android_asset/", htmlContent, "text/html", "UTF-8", null);
-        } catch (Exception e) {
-            android.util.Log.e("WordEditor", "HTML yükleme hatası: " + e.getMessage());
-            Toast.makeText(this, "Editör yüklenemedi", Toast.LENGTH_SHORT).show();
+    @Override
+    public void onHtmlChanged(String newHtml) {
+        if (!isContentChanged && !newHtml.equals(originalContent)) {
+            isContentChanged = true;
+            updateTitle();
         }
     }
+    @Override
+    public void onEditorFocused() {
 
-    public class WebAppInterface {
-        @JavascriptInterface
-        public void onTextChanged(String html) {
-            runOnUiThread(() -> {
-                if (!isContentChanged && !html.equals(originalContent)) {
-                    isContentChanged = true;
-                    updateTitle();
-                }
-            });
-        }
-
-        @JavascriptInterface
-        public void onFocus() {
-            // Focus olayı
-        }
-
-        @JavascriptInterface
-        public void onBlur() {
-            // Blur olayı
-        }
     }
+    @Override
+    public void onEditorBlurred() {
 
+    }
     private void setupFormattingToolbar() {
         formattingToolbar.setVisibility(View.GONE);
     }
@@ -215,232 +170,54 @@ public class WordEditorActivity extends BaseActivity {
         btnInsertTable.setOnClickListener(v -> showInsertTableDialog());
 
         // Formatting buttons
-        btnBold.setOnClickListener(v -> executeJS("setBold()"));
-        btnItalic.setOnClickListener(v -> executeJS("setItalic()"));
-        btnUnderline.setOnClickListener(v -> executeJS("setUnderline()"));
+        btnBold.setOnClickListener(v -> webViewBridge.executeJS("setBold()"));
+        btnItalic.setOnClickListener(v -> webViewBridge.executeJS("setItalic()"));
+        btnUnderline.setOnClickListener(v -> webViewBridge.executeJS("setUnderline()"));
         btnColor.setOnClickListener(v -> showColorPickerDialog());
         btnSize.setOnClickListener(v -> showFontSizeDialog());
 
         // Alignment buttons
-        btnAlignLeft.setOnClickListener(v -> executeJS("setAlignLeft()"));
-        btnAlignCenter.setOnClickListener(v -> executeJS("setAlignCenter()"));
-        btnAlignRight.setOnClickListener(v -> executeJS("setAlignRight()"));
+        btnAlignLeft.setOnClickListener(v -> webViewBridge.executeJS("setAlignLeft()"));
+        btnAlignCenter.setOnClickListener(v -> webViewBridge.executeJS("setAlignCenter()"));
+        btnAlignRight.setOnClickListener(v -> webViewBridge.executeJS("setAlignRight()"));
 
         // List buttons
-        btnOrderedList.setOnClickListener(v -> executeJS("setOrderedList()"));
-        btnUnorderedList.setOnClickListener(v -> executeJS("setUnorderedList()"));
+        btnOrderedList.setOnClickListener(v -> webViewBridge.executeJS("setOrderedList()"));
+        btnUnorderedList.setOnClickListener(v -> webViewBridge.executeJS("setUnorderedList()"));
 
         // Undo/Redo
-        btnUndo.setOnClickListener(v -> executeJS("undo()"));
-        btnRedo.setOnClickListener(v -> executeJS("redo()"));
+        btnUndo.setOnClickListener(v -> webViewBridge.executeJS("undo()"));
+        btnRedo.setOnClickListener(v -> webViewBridge.executeJS("redo()"));
         // Resim butonları
-        btnInsertImage.setOnClickListener(v -> showImageInsertOptions());
-        btnDeleteImage.setOnClickListener(v -> deleteSelectedImage());
-        btnImageInfo.setOnClickListener(v -> showImageInfo());
+        btnInsertImage.setOnClickListener(v -> imageManager.showImageInsertOptions());
+        btnImageInfo.setOnClickListener(v -> imageManager.showImageInfo());
     }
 
-    private void showImageInsertOptions() {
-        String[] options = {"Galeriden Seç", "Kamera ile Çek", "İptal"};
-
-        new MaterialAlertDialogBuilder(this)
-                .setTitle("Resim Ekle")
-                .setItems(options, (dialog, which) -> {
-                    switch (which) {
-                        case 0:
-                            openImagePicker();
-                            break;
-                        case 1:
-                            openCamera();
-                            break;
-                        case 2:
-                            // İptal - hiçbir şey yapma
-                            break;
-                    }
-                })
-                .show();
+    @Override
+    public void onImageInserted() {
+        notifyContentChange();
     }
 
-    private void openImagePicker() {
-        try {
-            Intent intent = new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
-            intent.setType("image/*");
-            startActivityForResult(intent, PICK_IMAGE_REQUEST);
-        } catch (Exception e) {
-            Log.e("WordEditor", "Galeri açma hatası: " + e.getMessage());
-            Toast.makeText(this, "Galeri açılamadı: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+    @Override
+    public String getCurrentFileName() {
+        if (currentFilePath != null) {
+            return new File(currentFilePath).getName();
         }
+        return "Yeni Belge";
     }
 
-    private void openCamera() {
-        try {
-            Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-            if (intent.resolveActivity(getPackageManager()) != null) {
-                startActivityForResult(intent, CAPTURE_IMAGE_REQUEST);
-            } else {
-                Toast.makeText(this, "Kamera uygulaması bulunamadı", Toast.LENGTH_SHORT).show();
-            }
-        } catch (Exception e) {
-            Log.e("WordEditor", "Kamera açma hatası: " + e.getMessage());
-            Toast.makeText(this, "Kamera açılamadı: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-        }
+    @Override
+    public boolean isContentChanged() {
+        return this.isContentChanged;
     }
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
 
-        if (resultCode == RESULT_OK) {
-            switch (requestCode) {
-                case PICK_IMAGE_REQUEST:
-                    if (data != null && data.getData() != null) {
-                        processSelectedImage(data.getData(), "Galeri Resmi");
-                    }
-                    break;
-
-                case CAPTURE_IMAGE_REQUEST:
-                    if (data != null && data.getExtras() != null) {
-                        Bitmap imageBitmap = (Bitmap) data.getExtras().get("data");
-                        if (imageBitmap != null) {
-                            processCapturedImage(imageBitmap);
-                        }
-                    }
-                    break;
-            }
+        if (imageManager.handleActivityResult(requestCode, resultCode, data)) {
+            return; // ImageManager başarıyla işledi
         }
-    }
-
-    private void processSelectedImage(Uri imageUri, String imageName) {
-        new Thread(() -> {
-            try {
-                Log.d("WordEditor", "🖼️ Resim işleniyor: " + imageUri.toString());
-
-                InputStream inputStream = getContentResolver().openInputStream(imageUri);
-                Bitmap bitmap = BitmapFactory.decodeStream(inputStream);
-                inputStream.close();
-
-                if (bitmap != null) {
-
-                    Bitmap optimizedBitmap = optimizeBitmap(bitmap, 800, 600);
-
-
-                    String base64Data = bitmapToBase64(optimizedBitmap, "PNG");
-                    String mimeType = "image/png";
-
-                    runOnUiThread(() -> {
-                        insertImageToEditor(base64Data, mimeType, imageName);
-                    });
-
-                    Log.d("WordEditor", "✅ Resim başarıyla işlendi ve eklendi");
-                } else {
-                    runOnUiThread(() -> {
-                        Toast.makeText(this, "❌ Resim yüklenemedi", Toast.LENGTH_SHORT).show();
-                    });
-                }
-
-            } catch (Exception e) {
-                Log.e("WordEditor", "❌ Resim işleme hatası: " + e.getMessage());
-                runOnUiThread(() -> {
-                    Toast.makeText(this, "Resim işleme hatası: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                });
-            }
-        }).start();
-    }
-
-    private void processCapturedImage(Bitmap bitmap) {
-        new Thread(() -> {
-            try {
-                Log.d("WordEditor", "📷 Çekilen resim işleniyor...");
-
-
-                Bitmap optimizedBitmap = optimizeBitmap(bitmap, 800, 600);
-
-
-                String base64Data = bitmapToBase64(optimizedBitmap, "JPEG");
-                String mimeType = "image/jpeg";
-
-
-                runOnUiThread(() -> {
-                    insertImageToEditor(base64Data, mimeType, "Kamera Resmi");
-                });
-
-                Log.d("WordEditor", "✅ Kamera resmi başarıyla eklendi");
-
-            } catch (Exception e) {
-                Log.e("WordEditor", "❌ Kamera resmi işleme hatası: " + e.getMessage());
-                runOnUiThread(() -> {
-                    Toast.makeText(this, "Kamera resmi işleme hatası: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                });
-            }
-        }).start();
-    }
-
-
-    private Bitmap optimizeBitmap(Bitmap originalBitmap, int maxWidth, int maxHeight) {
-        int width = originalBitmap.getWidth();
-        int height = originalBitmap.getHeight();
-
-        if (width <= maxWidth && height <= maxHeight) {
-            return originalBitmap; // Zaten uygun boyutta
-        }
-
-        float ratio = Math.min((float) maxWidth / width, (float) maxHeight / height);
-        int newWidth = Math.round(width * ratio);
-        int newHeight = Math.round(height * ratio);
-
-        return Bitmap.createScaledBitmap(originalBitmap, newWidth, newHeight, true);
-    }
-
-    private String bitmapToBase64(Bitmap bitmap, String format) {
-        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-
-        Bitmap.CompressFormat compressFormat = format.equalsIgnoreCase("PNG")
-                ? Bitmap.CompressFormat.PNG
-                : Bitmap.CompressFormat.JPEG;
-
-        int quality = format.equalsIgnoreCase("PNG") ? 100 : 85;
-        bitmap.compress(compressFormat, quality, outputStream);
-
-        byte[] imageBytes = outputStream.toByteArray();
-        return android.util.Base64.encodeToString(imageBytes, android.util.Base64.NO_WRAP);
-    }
-
-    private void insertImageToEditor(String base64Data, String mimeType, String imageName) {
-        if (!isWebViewLoaded) {
-            Toast.makeText(this, "⚠️ Editör henüz hazır değil, lütfen bekleyin...", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        String jsCommand = String.format("insertImageFromAndroid('%s', '%s', '%s')",
-                base64Data, mimeType, imageName);
-
-        webView.evaluateJavascript(jsCommand, result -> {
-            Log.d("WordEditor", "📝 Resim ekleme sonucu: " + result);
-
-            if ("true".equals(result)) {
-                Toast.makeText(this, "✅ " + imageName + " eklendi", Toast.LENGTH_SHORT).show();
-                notifyContentChange();
-            } else {
-                Toast.makeText(this, "❌ Resim eklenemedi", Toast.LENGTH_SHORT).show();
-            }
-        });
-    }
-
-    private void deleteSelectedImage() {
-        if (!isWebViewLoaded) {
-            Toast.makeText(this, "⚠️ Editör henüz hazır değil", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        webView.evaluateJavascript("deleteSelectedImageFromAndroid()", result -> {
-            Log.d("WordEditor", "🗑️ Resim silme sonucu: " + result);
-
-            if ("true".equals(result)) {
-                Toast.makeText(this, "✅ Resim silindi", Toast.LENGTH_SHORT).show();
-                notifyContentChange();
-            } else {
-                Toast.makeText(this, "ℹ️ Silinecek resim seçilmedi", Toast.LENGTH_SHORT).show();
-            }
-        });
     }
 
     private void notifyContentChange() {
@@ -448,56 +225,9 @@ public class WordEditorActivity extends BaseActivity {
             isContentChanged = true;
             updateTitle();
 
-            if (isWebViewLoaded) {
-                webView.evaluateJavascript("getImageCountFromAndroid()", result -> {
-                    try {
-                        int imageCount = Integer.parseInt(result);
-                        Log.d("WordEditor", "📊 Güncel resim sayısı: " + imageCount);
-                    } catch (Exception e) {
-                        // Ignore
-                    }
-                });
-            }
-        }
-    }
-
-    private void showImageInfo() {
-        if (!isWebViewLoaded) {
-            Toast.makeText(this, "⚠️ Editör henüz hazır değil", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        webView.evaluateJavascript("getImageCountFromAndroid()", result -> {
-            try {
-                int imageCount = Integer.parseInt(result);
-
-                webView.evaluateJavascript("validateImagesFromAndroid()", validationResult -> {
-                    Log.d("WordEditor", "📊 Resim doğrulama sonucu: " + validationResult);
-
-                    String message = "📊 Resim Bilgileri:\n\n" +
-                            "📷 Toplam Resim: " + imageCount + "\n" +
-                            "📁 Belge: " + (currentFilePath != null ? new java.io.File(currentFilePath).getName() : "Yeni Belge") + "\n" +
-                            "💾 Durum: " + (isContentChanged ? "Değiştirildi" : "Kaydedildi");
-
-                    new MaterialAlertDialogBuilder(this)
-                            .setTitle("🖼️ Resim Bilgileri")
-                            .setMessage(message)
-                            .setPositiveButton("Tamam", null)
-                            .setNeutralButton("Resimleri Doğrula", (dialog, which) -> {
-                                webView.evaluateJavascript("validateImageIntegrity()", null);
-                                Toast.makeText(this, "🔍 Resimler doğrulandı (konsola bakın)", Toast.LENGTH_SHORT).show();
-                            })
-                            .show();
-                });
-
-            } catch (NumberFormatException e) {
-                Toast.makeText(this, "❌ Resim sayısı alınamadı", Toast.LENGTH_SHORT).show();
-            }
-        });
-    }
-    private void executeJS(String jsCommand) {
-        if (isWebViewLoaded) {
-            webView.evaluateJavascript(jsCommand, null);
+            webViewBridge.getImageCount(count ->
+                    Log.d("WordEditor", "📊 Güncel resim sayısı: " + count)
+            );
         }
     }
 
@@ -534,7 +264,7 @@ public class WordEditorActivity extends BaseActivity {
                     showProgress(false);
 
                     if (result.isSuccess()) {
-                        originalContent = convertToHtml(result.getContent());
+                        originalContent = HtmlUtils.convertToHtml(result.getContent());
 
                         if (isWebViewLoaded) {
                             setEditorContent(originalContent);
@@ -567,7 +297,7 @@ public class WordEditorActivity extends BaseActivity {
 
         try {
 
-            String cleanContent = normalizeHtmlForEditor(content);
+            String cleanContent = HtmlUtils.normalizeHtmlForEditor(content);
 
             String jsContent = cleanContent
                     .replace("\\", "\\\\")
@@ -579,159 +309,13 @@ public class WordEditorActivity extends BaseActivity {
 
             Log.d("WordEditor", "Editöre gönderilen komut: " + jsCommand.substring(0, Math.min(200, jsCommand.length())));
 
-            executeJS(jsCommand);
+            webViewBridge.executeJS(jsCommand);
 
         } catch (Exception e) {
             Log.e("WordEditor", "Editöre içerik yükleme hatası: " + e.getMessage());
             // Fallback
-            executeJS("setHtml('<p>İçerik yüklenemedi</p>')");
+            webViewBridge.executeJS("setHtml('<p>İçerik yüklenemedi</p>')");
         }
-    }
-
-    private String normalizeHtmlForEditor(String html) {
-        if (html == null || html.trim().isEmpty()) {
-            return "<p><br></p>";
-        }
-
-        String normalized = html
-
-                .replaceAll("\\\\\"", "\"")
-                .replaceAll("\\\\n", "\n")
-                .replaceAll("\\\\r", "")
-                .replaceAll("\\\\/", "/")
-                .replace("&nbsp;", " ")
-                .replace("&amp;", "&")
-                .replace("&lt;", "<")
-                .replace("&gt;", ">")
-                .replace("&quot;", "\"")
-                .replace("&#39;", "'")
-                .trim();
-
-        if (!normalized.contains("<")) {
-            String[] lines = normalized.split("\n");
-            StringBuilder htmlBuilder = new StringBuilder();
-            for (String line : lines) {
-                if (line.trim().isEmpty()) {
-                    htmlBuilder.append("<p><br></p>");
-                } else {
-                    htmlBuilder.append("<p>").append(escapeHtml(line.trim())).append("</p>");
-                }
-            }
-            normalized = htmlBuilder.toString();
-        }
-
-        Log.d("WordEditor", "HTML normalize edildi");
-        return normalized;
-    }
-
-    private String convertToHtml(String content) {
-        if (content == null) return "<p><br></p>";
-
-
-        if (content.trim().startsWith("<") && (content.contains("<p>") || content.contains("<div>") || content.contains("<table"))) {
-            Log.d("WordEditor", "İçerik zaten HTML formatında");
-            return content;
-        }
-
-        StringBuilder html = new StringBuilder();
-        html.append("<div>");
-
-        String[] lines = content.split("\n");
-
-        boolean inTable = false;
-        StringBuilder tableBuilder = null;
-
-        for (String line : lines) {
-            line = line.trim();
-
-            if (line.isEmpty()) {
-                if (!inTable) {
-                    html.append("<p><br></p>");
-                }
-                continue;
-            }
-
-
-            if (isTableLine(line)) {
-                if (!inTable) {
-
-                    inTable = true;
-                    tableBuilder = new StringBuilder();
-                    tableBuilder.append("<table border=\"1\" style=\"border-collapse: collapse; width: 100%; margin: 10px 0;\">");
-                }
-
-                if (line.contains("│")) {
-
-                    tableBuilder.append(convertTableLineToHtml(line));
-                }
-
-
-            } else {
-
-                if (inTable && tableBuilder != null) {
-                    tableBuilder.append("</table>");
-                    html.append(tableBuilder.toString());
-                    inTable = false;
-                    tableBuilder = null;
-                }
-
-
-                html.append("<p>").append(escapeHtml(line)).append("</p>");
-            }
-        }
-
-        if (inTable && tableBuilder != null) {
-            tableBuilder.append("</table>");
-            html.append(tableBuilder.toString());
-        }
-
-        html.append("</div>");
-
-        String result = html.toString();
-        Log.d("WordEditor", "Text → HTML dönüştürüldü: " + result.substring(0, Math.min(200, result.length())));
-
-        return result;
-    }
-
-    private String escapeHtml(String text) {
-        if (text == null) return "";
-        return text
-                .replace("&", "&amp;")
-                .replace("<", "&lt;")
-                .replace(">", "&gt;")
-                .replace("\"", "&quot;")
-                .replace("'", "&#39;");
-    }
-    private boolean isTableLine(String line) {
-        return line.contains("│") || line.contains("┌") || line.contains("├") ||
-                line.contains("└") || line.contains("─");
-    }
-
-    private String convertTableLineToHtml(String line) {
-        if (!line.contains("│")) {
-            return "";
-        }
-
-
-        String[] cells = line.split("│");
-        StringBuilder tableRow = new StringBuilder("<tr>");
-
-        for (String cell : cells) {
-            String cleanCell = cell.trim();
-            if (!cleanCell.isEmpty() &&
-                    !cleanCell.equals("┌") && !cleanCell.equals("├") &&
-                    !cleanCell.equals("└") && !cleanCell.equals("┐") &&
-                    !cleanCell.equals("┤") && !cleanCell.equals("┘") &&
-                    !cleanCell.matches("[-─]+")) {
-
-                tableRow.append("<td style=\"padding: 8px; border: 1px solid #333;\">")
-                        .append(escapeHtml(cleanCell))
-                        .append("</td>");
-            }
-        }
-
-        tableRow.append("</tr>");
-        return tableRow.toString();
     }
 
     private void saveDocument() {
@@ -745,33 +329,14 @@ public class WordEditorActivity extends BaseActivity {
             return;
         }
 
-        Log.d("WordEditor", "💾 GELİŞTİRİLMİŞ KAYDETME BAŞLIYOR: " + currentFilePath);
+        Log.d("WordEditor", "💾 KAYDETME BAŞLIYOR: " + currentFilePath);
         showProgress(true);
 
-        webView.evaluateJavascript("getHtmlWithFormats()", formatResult -> {
-            if (formatResult != null && !formatResult.equals("null")) {
-                Log.d("WordEditor", "📝 Format korumalı HTML alındı");
-                processSaveResult(formatResult);
-            } else {
-
-                Log.w("WordEditor", "⚠️ Format korumalı HTML başarısız, resimli HTML deneniyor...");
-                webView.evaluateJavascript("getHtmlWithImages()", imageResult -> {
-                    if (imageResult != null && !imageResult.equals("null")) {
-                        processSaveResult(imageResult);
-                    } else {
-
-                        Log.w("WordEditor", "⚠️ Resimli HTML başarısız, normal HTML deneniyor...");
-                        webView.evaluateJavascript("getHtml()", result -> {
-                            processSaveResult(result);
-                        });
-                    }
-                });
-            }
-        });
+        webViewBridge.getBestEffortHtml(html -> processSaveResult(html));
     }
 
     private void processSaveResult(String result) {
-        String htmlContent = cleanHtmlResultAdvanced(result);
+        String htmlContent =HtmlUtils.cleanHtmlResultAdvanced(result);
         Log.d("WordEditor", "🧹 Temizlenmiş HTML uzunluğu: " +
                 (htmlContent != null ? htmlContent.length() : 0));
 
@@ -784,7 +349,7 @@ public class WordEditorActivity extends BaseActivity {
         }
 
 
-        int imageCount = countImagesInHtml(htmlContent);
+        int imageCount =HtmlUtils.countImagesInHtml(htmlContent);
         Log.d("WordEditor", "🖼️ HTML'de " + imageCount + " resim bulundu");
 
 
@@ -797,7 +362,7 @@ public class WordEditorActivity extends BaseActivity {
 
                 if (originalFile.exists()) {
                     try {
-                        copyFile(originalFile, backupFile);
+                        FileUtils.copyFile(originalFile, backupFile);
                         Log.d("WordEditor", "🔒 Yedek oluşturuldu");
                     } catch (Exception e) {
                         Log.w("WordEditor", "⚠️ Yedekleme hatası: " + e.getMessage());
@@ -864,7 +429,7 @@ public class WordEditorActivity extends BaseActivity {
         if (backupFile.exists()) {
             try {
                 File originalFile = new File(currentFilePath);
-                copyFile(backupFile, originalFile);
+                FileUtils.copyFile(backupFile, originalFile);
                 backupFile.delete();
                 Log.d("WordEditor", "🔄 Yedekten geri yüklendi");
             } catch (Exception e) {
@@ -892,7 +457,7 @@ public class WordEditorActivity extends BaseActivity {
 
                     if (testResult.isSuccess()) {
                         String content = testResult.getContent();
-                        int imageCountAfterSave = countImagesInHtml(content);
+                        int imageCountAfterSave = HtmlUtils.countImagesInHtml(content);
 
                         Log.d("WordEditor", "✅ Test okuma başarılı");
                         Log.d("WordEditor", "📝 Okunan içerik uzunluğu: " +
@@ -913,202 +478,6 @@ public class WordEditorActivity extends BaseActivity {
         } catch (java.util.concurrent.RejectedExecutionException e) {
             Log.w("WordEditor", "⚠️ Test okuma görevi reddedildi - ExecutorService kapatılmış: " + e.getMessage());
         }
-    }
-
-    private String cleanHtmlResultAdvanced(String result) {
-        if (result == null || result.trim().isEmpty()) {
-            Log.w("WordEditor", "⚠️ JavaScript sonucu boş");
-            return "";
-        }
-
-        String cleaned = result.trim();
-        Log.d("WordEditor", "🔄 Ham sonuç uzunluğu: " + cleaned.length());
-
-        if (cleaned.startsWith("\"") && cleaned.endsWith("\"")) {
-            cleaned = cleaned.substring(1, cleaned.length() - 1);
-        }
-
-        cleaned = cleaned
-                .replace("\\u003C", "<")
-                .replace("\\u003E", ">")
-                .replace("\\u0026", "&")
-                .replace("\\u0022", "\"")
-                .replace("\\u0027", "'")
-                .replace("\\\"", "\"")
-                .replace("\\n", "\n")
-                .replace("\\r", "")
-                .replace("\\/", "/")
-                .replace("\\\\", "\\");
-
-        cleaned = cleaned
-                .replace("&amp;", "&")
-                .replace("&lt;", "<")
-                .replace("&gt;", ">")
-                .replace("&quot;", "\"")
-                .replace("&#39;", "'");
-
-        cleaned = cleanHtmlPreservingImages(cleaned);
-
-        Log.d("WordEditor", "✅ Gelişmiş temizleme tamamlandı - Son uzunluk: " + cleaned.length());
-        return cleaned;
-    }
-
-    private String cleanHtmlPreservingImages(String html) {
-
-        java.util.Map<String, String> imageMap = new java.util.HashMap<>();
-        Pattern imagePattern = Pattern.compile("data:image/[^;]+;base64,[A-Za-z0-9+/=]+");
-        Matcher imageMatcher = imagePattern.matcher(html);
-
-        int imageIndex = 0;
-        StringBuffer sb = new StringBuffer();
-
-        while (imageMatcher.find()) {
-            String imageData = imageMatcher.group();
-            String placeholder = "IMAGE_PLACEHOLDER_" + imageIndex;
-            imageMap.put(placeholder, imageData);
-            imageMatcher.appendReplacement(sb, placeholder);
-            imageIndex++;
-        }
-        imageMatcher.appendTail(sb);
-
-
-        String cleanedHtml = sb.toString()
-                .replaceAll("\\s+", " ")  // Çoklu boşlukları tek boşluğa çevir
-                .trim();
-
-
-        for (java.util.Map.Entry<String, String> entry : imageMap.entrySet()) {
-            cleanedHtml = cleanedHtml.replace(entry.getKey(), entry.getValue());
-        }
-
-        Log.d("WordEditor", "🖼️ " + imageMap.size() + " resim korunarak HTML temizlendi");
-        return cleanedHtml;
-    }
-
-
-    private int countImagesInHtml(String html) {
-        if (html == null) return 0;
-
-        Pattern pattern = Pattern.compile("<img[^>]*src=\"data:image/[^\"]+\"[^>]*>");
-        Matcher matcher = pattern.matcher(html);
-
-        int count = 0;
-        while (matcher.find()) {
-            count++;
-        }
-
-        return count;
-    }
-
-    private void copyFile(File source, File destination) throws Exception {
-        try (java.io.FileInputStream fis = new java.io.FileInputStream(source);
-             java.io.FileOutputStream fos = new java.io.FileOutputStream(destination)) {
-
-            byte[] buffer = new byte[1024];
-            int length;
-            while ((length = fis.read(buffer)) > 0) {
-                fos.write(buffer, 0, length);
-            }
-            fos.flush();
-        }
-    }
-
-    private void verifyDocument() {
-        if (executorService == null || currentFilePath == null) return;
-
-        executorService.execute(() -> {
-            try {
-                Thread.sleep(500); // Biraz bekle
-
-
-                WordDocumentHelper.WordContent result = WordDocumentHelper.readWordDocument(currentFilePath);
-
-                if (result.isSuccess()) {
-                    Log.d("WordEditor", "✅ Doğrulama başarılı - Belge okunabilir");
-
-                    runOnUiThread(() -> {
-                        // UI'da başarı göster (opsiyonel)
-                        Log.d("WordEditor", "📄 Belge doğrulandı ve okunabilir durumda");
-                    });
-                } else {
-                    Log.w("WordEditor", "⚠️ Doğrulama hatası: " + result.getError());
-                }
-
-            } catch (Exception e) {
-                Log.e("WordEditor", "❌ Doğrulama exception: " + e.getMessage());
-            }
-        });
-    }
-
-    private void loadDocumentForVerification() {
-        if (executorService == null) return;
-
-        executorService.execute(() -> {
-            try {
-                // Kısa bir bekleme
-                Thread.sleep(500);
-
-                WordDocumentHelper.WordContent result = WordDocumentHelper.readWordDocument(currentFilePath);
-
-                if (result.isSuccess()) {
-                    Log.d("WordEditor", "Doğrulama - Okunan içerik: " +
-                            result.getContent().substring(0, Math.min(200, result.getContent().length())));
-
-                    runOnUiThread(() -> {
-                        originalContent = result.getContent();
-                        // İçeriği editöre yeniden yükleme (opsiyonel)
-                        // setEditorContent(originalContent);
-                    });
-                }
-            } catch (Exception e) {
-                Log.e("WordEditor", "Doğrulama hatası: " + e.getMessage());
-            }
-        });
-    }
-
-    private String cleanHtmlResult(String result) {
-        if (result == null || result.trim().isEmpty()) {
-            Log.w("WordEditor", "⚠️ JavaScript sonucu boş");
-            return "";
-        }
-
-        String cleaned = result.trim();
-        Log.d("WordEditor", "🔄 Ham sonuç uzunluğu: " + cleaned.length());
-
-
-        if (cleaned.startsWith("\"") && cleaned.endsWith("\"")) {
-            cleaned = cleaned.substring(1, cleaned.length() - 1);
-        }
-
-
-        cleaned = cleaned
-                .replace("\\u003C", "<")
-                .replace("\\u003E", ">")
-                .replace("\\u0026", "&")
-                .replace("\\u0022", "\"")
-                .replace("\\u0027", "'");
-
-
-        cleaned = cleaned
-                .replace("\\\"", "\"")
-                .replace("\\n", "\n")
-                .replace("\\r", "")
-                .replace("\\/", "/")
-                .replace("\\\\", "\\");
-
-
-        cleaned = cleaned
-                .replace("&amp;", "&")
-                .replace("&lt;", "<")
-                .replace("&gt;", ">")
-                .replace("&quot;", "\"")
-                .replace("&#39;", "'");
-
-        Log.d("WordEditor", "✅ Temizlenmiş sonuç uzunluğu: " + cleaned.length());
-        Log.d("WordEditor", "📝 Temizlenmiş içerik örneği: " +
-                cleaned.substring(0, Math.min(150, cleaned.length())));
-
-        return cleaned;
     }
 
 
@@ -1158,8 +527,8 @@ public class WordEditorActivity extends BaseActivity {
 
         showProgress(true);
 
-        webView.evaluateJavascript("getHtml()", result -> {
-            String htmlContent = cleanHtmlResult(result);
+        webViewBridge.getHtml(result -> {
+            String htmlContent = HtmlUtils.cleanHtmlResult(result);
 
             executorService.execute(() -> {
                 try {
@@ -1208,7 +577,7 @@ public class WordEditorActivity extends BaseActivity {
                 .setTitle("Yazı Rengi Seçin")
                 .setItems(colorNames, (dialog, which) -> {
                     currentTextColor = colorValues[which];
-                    executeJS("setTextColor('" + currentTextColor + "')");
+                    webViewBridge.executeJS("setTextColor('" + currentTextColor + "')");
                     Toast.makeText(this, colorNames[which] + " renk seçildi", Toast.LENGTH_SHORT).show();
                 })
                 .show();
@@ -1246,7 +615,7 @@ public class WordEditorActivity extends BaseActivity {
                 .setView(dialogView)
                 .setPositiveButton("Uygula", (dialog, which) -> {
                     int selectedSize = seekBarSize.getProgress();
-                    executeJS("setFontSize(" + selectedSize + ")");
+                    webViewBridge.executeJS("setFontSize(" + selectedSize + ")");
                     Toast.makeText(this, "Font boyutu: " + sizeNames[selectedSize], Toast.LENGTH_SHORT).show();
                 })
                 .setNegativeButton("İptal", null)
@@ -1260,7 +629,7 @@ public class WordEditorActivity extends BaseActivity {
                 .setTitle("Yazı Tipi Seçin")
                 .setItems(fonts, (dialog, which) -> {
                     currentFontFamily = fonts[which];
-                    executeJS("setFontName('" + currentFontFamily + "')");
+                    webViewBridge.executeJS("setFontName('" + currentFontFamily + "')");
                     Toast.makeText(this, "Font: " + currentFontFamily, Toast.LENGTH_SHORT).show();
                 })
                 .show();
@@ -1283,7 +652,7 @@ public class WordEditorActivity extends BaseActivity {
                         int cols = Integer.parseInt(editCols.getText().toString());
 
                         if (rows > 0 && cols > 0 && rows <= 20 && cols <= 10) {
-                            executeJS("insertTable(" + rows + ", " + cols + ")");
+                            webViewBridge.executeJS("insertTable(" + rows + ", " + cols + ")");
                             Toast.makeText(this, "Tablo eklendi", Toast.LENGTH_SHORT).show();
                         } else {
                             Toast.makeText(this, "Geçersiz tablo boyutu", Toast.LENGTH_SHORT).show();
@@ -1352,8 +721,8 @@ public class WordEditorActivity extends BaseActivity {
     }
 
     private void showWordCount() {
-        webView.evaluateJavascript("getText()", result -> {
-            String textContent = cleanHtmlResult(result);
+        webViewBridge.getPlainText(result -> {
+            String textContent = HtmlUtils.cleanHtmlResult(result);
 
             String[] words = textContent.trim().split("\\s+");
             int wordCount = textContent.trim().isEmpty() ? 0 : words.length;
@@ -1401,8 +770,8 @@ public class WordEditorActivity extends BaseActivity {
 
     private void autoSaveDocument() {
         if (executorService != null && !executorService.isShutdown()) {
-            webView.evaluateJavascript("getHtml()", result -> {
-                String htmlContent = cleanHtmlResult(result);
+            webViewBridge.getHtml(result -> {
+                String htmlContent = HtmlUtils.cleanHtmlResult(result);
 
                 executorService.execute(() -> {
                     try {
@@ -1443,19 +812,7 @@ public class WordEditorActivity extends BaseActivity {
                 Thread.currentThread().interrupt();
             }
         }
-
-        // WebView'i temizle
-        if (webView != null) {
-            try {
-                webView.loadUrl("about:blank");
-                webView.destroy();
-                webView = null;
-                Log.d("WordEditor", "🌐 WebView temizlendi");
-            } catch (Exception e) {
-                Log.e("WordEditor", "❌ WebView temizleme hatası: " + e.getMessage());
-            }
-        }
-
+        webViewBridge.destroyWebView();
         super.onDestroy();
         Log.d("WordEditor", "✅ Activity destroy tamamlandı");
     }
