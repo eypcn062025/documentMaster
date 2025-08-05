@@ -8,10 +8,9 @@ import android.net.Uri;
 import android.util.Log;
 import android.widget.Toast;
 
-import com.documentmaster.app.Document;
 import com.documentmaster.app.activities.WordEditorActivity;
 import com.documentmaster.app.utils.FileManagerHelper;
-import com.documentmaster.app.utils.WordDocumentHelper;
+import com.documentmaster.app.utils.word.WordDocumentHelper;
 
 import java.io.File;
 
@@ -25,8 +24,7 @@ public class OpenDocument {
 
     public interface OpenDocumentCallback {
         void onDocumentOpened(String filePath);
-        void showProgressDialog(String message);
-        void hideProgressDialog();
+
     }
 
     public OpenDocument(Context context, OpenDocumentCallback callback) {
@@ -83,10 +81,6 @@ public class OpenDocument {
                 return;
             }
 
-            if (callback != null) {
-                callback.showProgressDialog("Dosya açılıyor...");
-            }
-
             new Thread(() -> {
                 try {
                     String filePath = null;
@@ -102,16 +96,11 @@ public class OpenDocument {
                         final String finalPath = filePath;
 
                         ((Activity) context).runOnUiThread(() -> {
-                            if (callback != null) {
-                                callback.hideProgressDialog();
-                            }
+
                             openDocumentFromPath(finalPath, fileName);
                         });
                     } else {
                         ((Activity) context).runOnUiThread(() -> {
-                            if (callback != null) {
-                                callback.hideProgressDialog();
-                            }
                             Toast.makeText(context, "Dosya erişimi başarısız", Toast.LENGTH_LONG).show();
                         });
                     }
@@ -119,9 +108,6 @@ public class OpenDocument {
                 } catch (Exception e) {
                     Log.e(TAG, "Dosya işleme hatası: " + e.getMessage());
                     ((Activity) context).runOnUiThread(() -> {
-                        if (callback != null) {
-                            callback.hideProgressDialog();
-                        }
                         Toast.makeText(context, "Dosya açma hatası: " + e.getMessage(), Toast.LENGTH_LONG).show();
                     });
                 }
@@ -174,22 +160,6 @@ public class OpenDocument {
         }
     }
 
-    public void openSelectedFile(Uri fileUri) {
-        try {
-            String filePath = fileUri.getPath();
-            if (filePath != null) {
-                Document document = new Document(filePath);
-                openDocumentFromPath(filePath, document.getName());
-            } else {
-                Toast.makeText(context, "Dosya yolu alınamadı", Toast.LENGTH_SHORT).show();
-
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "Dosya açma hatası: " + e.getMessage());
-            Toast.makeText(context, "Dosya açılamadı: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-        }
-    }
-
     // ========== PRIVATE HELPER METHODS ==========
 
     private boolean isSupportedFile(String fileName) {
@@ -210,14 +180,11 @@ public class OpenDocument {
         return false;
     }
 
-
-
     // ========== PUBLIC UTILITY METHODS ==========
 
     public static int getPickFileRequestCode() {
         return PICK_FILE_REQUEST;
     }
-
 
     public static String[] getSupportedExtensions() {
         return new String[]{

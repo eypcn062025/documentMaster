@@ -1,13 +1,8 @@
 package com.documentmaster.app;
 
-import android.Manifest;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
-import android.os.Environment;
-import android.provider.Settings;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -17,8 +12,6 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.widget.Toolbar;
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -28,29 +21,28 @@ import com.documentmaster.app.document.LoadDocument;
 import com.documentmaster.app.document.OpenDocument;
 
 import com.documentmaster.app.permission.PermissionManager;
+import com.documentmaster.app.utils.ActionDialog;
 import com.google.android.material.button.MaterialButton;
-import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
 import java.util.ArrayList;
 import java.util.List;
 
 public class MainActivity extends BaseActivity implements DocumentMenuOperations.DocumentOperationCallback, CreateDocument.CreateDocumentCallback, LoadDocument.LoadDocumentCallback,
-        OpenDocument.OpenDocumentCallback,PermissionManager.PermissionCallback{
+        OpenDocument.OpenDocumentCallback, PermissionManager.PermissionCallback{
     private Toolbar toolbar;
-    private MaterialButton btnCreatePdf, btnOpenFile, btnViewAll;
+    private MaterialButton btnCreate, btnOpenFile, btnViewAll;
     private FloatingActionButton fab;
     private RecyclerView recyclerViewDocuments;
     private LinearLayout emptyState;
-    private List<Document> documentList;
     private DocumentAdapter documentAdapter;
-    private static final int PERMISSION_REQUEST_CODE = 1001;
-    private static final int PICK_FILE_REQUEST = 1002;
     private DocumentMenuOperations documentOperations;
     private CreateDocument createDocument;
     private LoadDocument loadDocument;
     private OpenDocument openDocument;
     private PermissionManager permissionManager;
+    private ActionDialog actionDialog;
+    private List<Document> documentList;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -66,6 +58,7 @@ public class MainActivity extends BaseActivity implements DocumentMenuOperations
         openDocument = new OpenDocument(this, this);
         permissionManager = new PermissionManager(this, this);
         permissionManager.checkPermissions();
+        actionDialog = new ActionDialog(this, createDocument, openDocument, loadDocument);
     }
     @Override
     protected void onDestroy() {
@@ -79,14 +72,16 @@ public class MainActivity extends BaseActivity implements DocumentMenuOperations
             documentList.clear();
         }
     }
+
     @Override
     protected void onResume() {
         super.onResume();
         permissionManager.handleResumeCheck();
     }
+
     private void initViews() {
         toolbar = findViewById(R.id.toolbar);
-        btnCreatePdf = findViewById(R.id.btnCreatePdf);
+        btnCreate = findViewById(R.id.btnCreate);
         btnOpenFile = findViewById(R.id.btnOpenFile);
         btnViewAll = findViewById(R.id.btnViewAll);
         fab = findViewById(R.id.fab);
@@ -108,6 +103,7 @@ public class MainActivity extends BaseActivity implements DocumentMenuOperations
             public void onDocumentClick(Document document) {
                 documentOperations.openDocument(document);
             }
+
             @Override
             public void onDocumentLongClick(Document document) {
                 documentOperations.showDocumentOptionsMenu(document);
@@ -116,12 +112,14 @@ public class MainActivity extends BaseActivity implements DocumentMenuOperations
         recyclerViewDocuments.setLayoutManager(new LinearLayoutManager(this));
         recyclerViewDocuments.setAdapter(documentAdapter);
     }
+
     private void setupListeners() {
-        btnCreatePdf.setOnClickListener(v -> createDocument.showCreateNewDocumentDialog());
+        btnCreate.setOnClickListener(v -> createDocument.showCreateNewDocumentDialog());
         btnOpenFile.setOnClickListener(v -> openDocument.openFilePicker());
         btnViewAll.setOnClickListener(v -> {});
-        fab.setOnClickListener(v -> showQuickActionDialog());
+        fab.setOnClickListener(v -> actionDialog.showQuickActionDialog());
     }
+
     //----------permission-----------//
     @Override
     public void onPermissionGranted() {
@@ -132,18 +130,20 @@ public class MainActivity extends BaseActivity implements DocumentMenuOperations
     public void onPermissionDenied() {
         loadDocument.loadInternalDocuments();
     }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        permissionManager.handlePermissionResult(requestCode, permissions, grantResults);
+    }
+
     //-----------create---------------//
     @Override
     public void onDocumentCreated() {
         loadDocument.loadDocuments();
     }
 
-
-
-    @Override
-    public void onDocumentUpdated() {
-        loadDocument.loadDocuments();
-    }
+    //-------menuOperation-------//
 
     @Override
     public void onDocumentDeleted(Document document) {
@@ -180,32 +180,11 @@ public class MainActivity extends BaseActivity implements DocumentMenuOperations
         return super.onOptionsItemSelected(item);
     }
 
-
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        permissionManager.handlePermissionResult(requestCode, permissions, grantResults);
-    }
-
-
-    private void updateUI() {
-        if (documentList.isEmpty()) {
-            emptyState.setVisibility(View.VISIBLE);
-            recyclerViewDocuments.setVisibility(View.GONE);
-        } else {
-            emptyState.setVisibility(View.GONE);
-            recyclerViewDocuments.setVisibility(View.VISIBLE);
-            documentAdapter.notifyDataSetChanged();
-        }
-    }
-
-
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
 
-        if (requestCode == PICK_FILE_REQUEST && resultCode == RESULT_OK && data != null) {
+        if (requestCode == OpenDocument.getPickFileRequestCode() && resultCode == RESULT_OK && data != null) {
             Uri selectedFileUri = data.getData();
             if (selectedFileUri != null) {
                 Log.d("MainActivity", "Seçilen dosya URI: " + selectedFileUri.toString());
@@ -216,30 +195,15 @@ public class MainActivity extends BaseActivity implements DocumentMenuOperations
         }
     }
 
-    private android.app.ProgressDialog progressDialog;
-
-    private void showQuickActionDialog() {
-        String[] options = {"Yeni Word Belgesi", "Dosya Aç", "Tarama Yap", "Son Belgeleri Görüntüle"};
-
-        new MaterialAlertDialogBuilder(this)
-                .setTitle("Hızlı İşlemler")
-                .setItems(options, (dialog, which) -> {
-                    switch (which) {
-                        case 0:
-                            createDocument.createNewWordDocument();
-                            break;
-                        case 1:
-                            openDocument.openFilePicker();
-                            break;
-                        case 2:
-                            Toast.makeText(this, "Tarama özelliği geliştiriliyor...", Toast.LENGTH_SHORT).show();
-                            break;
-                        case 3:
-                            showRecentDocuments();
-                            break;
-                    }
-                })
-                .show();
+    private void updateUI() {
+        if (documentList.isEmpty()) {
+            emptyState.setVisibility(View.VISIBLE);
+            recyclerViewDocuments.setVisibility(View.GONE);
+        } else {
+            emptyState.setVisibility(View.GONE);
+            recyclerViewDocuments.setVisibility(View.VISIBLE);
+            documentAdapter.notifyDataSetChanged();
+        }
     }
 
     @Override
@@ -258,30 +222,5 @@ public class MainActivity extends BaseActivity implements DocumentMenuOperations
     public void onDocumentOpened(String filePath) {
         loadDocument.loadDocuments();
     }
-    @Override
-    public void showProgressDialog(String message) {
-        runOnUiThread(() -> {
-            if (progressDialog == null) {
-                progressDialog = new android.app.ProgressDialog(this);
-                progressDialog.setProgressStyle(android.app.ProgressDialog.STYLE_SPINNER);
-                progressDialog.setCancelable(false);
-            }
-            progressDialog.setMessage(message);
-            progressDialog.show();
-        });
-    }
-
-    @Override
-    public void hideProgressDialog() {
-        runOnUiThread(() -> {
-            if (progressDialog != null && progressDialog.isShowing()) {
-                progressDialog.dismiss();
-            }
-        });
-    }
-    private void showRecentDocuments() {
-        loadDocument.loadRecentDocuments(5);
-    }
-
 
 }

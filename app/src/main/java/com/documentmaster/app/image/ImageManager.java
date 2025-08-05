@@ -168,7 +168,6 @@ public class ImageManager {
         }).start();
     }
 
-
     private void insertImageToEditor(String base64Data, String mimeType, String imageName) {
         webViewBridge.insertImage(base64Data, mimeType, imageName,
                 () -> {

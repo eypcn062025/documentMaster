@@ -3,13 +3,14 @@ package com.documentmaster.app.document;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
+import android.os.Environment;
 import android.util.Log;
 import android.view.View;
 import android.widget.Toast;
 
 import com.documentmaster.app.R;
 import com.documentmaster.app.activities.WordEditorActivity;
-import com.documentmaster.app.utils.WordDocumentHelper;
+import com.documentmaster.app.utils.word.WordDocumentHelper;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputEditText;
 
@@ -26,12 +27,10 @@ public class CreateDocument {
         void onDocumentCreated();
 
     }
-
     public CreateDocument(Context context, CreateDocumentCallback callback) {
         this.context = context;
         this.callback = callback;
     }
-
     public void showCreateNewDocumentDialog() {
         String[] options = {"Word Belgesi (.docx)", "Metin Belgesi (.txt)", "PDF Belgesi"};
 
@@ -53,13 +52,11 @@ public class CreateDocument {
                 .show();
     }
 
-
     public void createNewWordDocument() {
         View dialogView = ((Activity) context).getLayoutInflater().inflate(R.layout.dialog_new_document, null);
         TextInputEditText editFileName = dialogView.findViewById(R.id.editFileName);
         editFileName.setHint("Word belgesi adı");
         editFileName.setText("Yeni Belge");
-
         new MaterialAlertDialogBuilder(context)
                 .setTitle("Yeni Word Belgesi")
                 .setView(dialogView)
@@ -74,21 +71,14 @@ public class CreateDocument {
                 .setNegativeButton("İptal", null)
                 .show();
     }
-
     public void createWordDocumentFile(String fileName) {
         try {
-            File documentsDir = new File(context.getFilesDir(), "Documents");
-            if (!documentsDir.exists()) {
-                boolean created = documentsDir.mkdirs();
-                Log.d(TAG, "Documents dizini oluşturuldu: " + created);
-            }
-
+            File documentsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS);
             if (!fileName.endsWith(".docx")) {
                 fileName += ".docx";
             }
 
             String filePath = new File(documentsDir, fileName).getAbsolutePath();
-            Log.d(TAG, "Yeni DOCX dosya yolu: " + filePath);
 
             boolean success = WordDocumentHelper.createWordDocument(filePath, "");
 

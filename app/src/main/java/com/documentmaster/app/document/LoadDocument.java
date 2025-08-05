@@ -59,37 +59,6 @@ public class LoadDocument {
         }
     }
 
-    public void loadDownloadsDocuments() {
-        List<Document> documentList = new ArrayList<>();
-        loadDownloadsDocuments(documentList);
-
-        if (callback != null) {
-            callback.onDocumentsLoaded(documentList);
-        }
-    }
-
-
-    public void loadDocumentsFromSpecificFolder(String folderPath) {
-        List<Document> documentList = new ArrayList<>();
-
-        try {
-            File folder = new File(folderPath);
-            if (folder.exists() && folder.isDirectory()) {
-                loadDocumentsFromDirectory(folder, documentList);
-            }
-
-            if (callback != null) {
-                callback.onDocumentsLoaded(documentList);
-            }
-
-        } catch (Exception e) {
-            Log.e(TAG, "Klasör yükleme hatası: " + e.getMessage());
-            if (callback != null) {
-                callback.onDocumentLoadFailed("Klasör yükleme hatası: " + e.getMessage());
-            }
-        }
-    }
-
     // ========== PRIVATE HELPER METHODS ==========
 
     private void loadInternalDocuments(List<Document> documentList) {
@@ -161,34 +130,12 @@ public class LoadDocument {
 
     // ========== PUBLIC UTILITY METHODS ==========
 
-
-    public void loadDocumentsByType(String extension) {
-        List<Document> allDocuments = new ArrayList<>();
-        loadInternalDocuments(allDocuments);
-        loadDownloadsDocuments(allDocuments);
-        loadDocumentsFromFolder(allDocuments);
-
-        List<Document> filteredDocuments = new ArrayList<>();
-        for (Document doc : allDocuments) {
-            if (doc.getName().toLowerCase().endsWith(extension.toLowerCase())) {
-                filteredDocuments.add(doc);
-            }
-        }
-
-        if (callback != null) {
-            callback.onDocumentsLoaded(filteredDocuments);
-        }
-    }
-
-
     public void loadRecentDocuments(int count) {
         List<Document> allDocuments = new ArrayList<>();
         loadInternalDocuments(allDocuments);
         loadDownloadsDocuments(allDocuments);
         loadDocumentsFromFolder(allDocuments);
 
-
-        // İstenen sayıda belge al
         List<Document> recentDocuments = new ArrayList<>();
         for (int i = 0; i < Math.min(count, allDocuments.size()); i++) {
             recentDocuments.add(allDocuments.get(i));
@@ -199,43 +146,4 @@ public class LoadDocument {
         }
     }
 
-
-    public void searchDocuments(String searchQuery) {
-        List<Document> allDocuments = new ArrayList<>();
-        loadInternalDocuments(allDocuments);
-        loadDownloadsDocuments(allDocuments);
-        loadDocumentsFromFolder(allDocuments);
-
-        List<Document> searchResults = new ArrayList<>();
-        String query = searchQuery.toLowerCase().trim();
-
-        for (Document doc : allDocuments) {
-            if (doc.getName().toLowerCase().contains(query)) {
-                searchResults.add(doc);
-            }
-        }
-
-        if (callback != null) {
-            callback.onDocumentsLoaded(searchResults);
-        }
-
-        Log.d(TAG, "Arama: '" + searchQuery + "' - " + searchResults.size() + " sonuç bulundu");
-    }
-
-
-    public int getDocumentCount() {
-        List<Document> allDocuments = new ArrayList<>();
-        loadInternalDocuments(allDocuments);
-        loadDownloadsDocuments(allDocuments);
-        loadDocumentsFromFolder(allDocuments);
-
-        return allDocuments.size();
-    }
-
-    public static String[] getSupportedDocumentTypes() {
-        return new String[]{
-                ".docx", ".doc", ".html", ".htm", ".txt",
-                ".pdf", ".xls", ".xlsx", ".ppt", ".pptx", ".csv"
-        };
-    }
 }

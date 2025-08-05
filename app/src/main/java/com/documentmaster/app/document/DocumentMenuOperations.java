@@ -11,7 +11,7 @@ import android.widget.Toast;
 import com.documentmaster.app.Document;
 import com.documentmaster.app.R;
 import com.documentmaster.app.activities.WordEditorActivity;
-import com.documentmaster.app.utils.WordDocumentHelper;
+import com.documentmaster.app.utils.word.WordDocumentHelper;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputEditText;
 
@@ -25,7 +25,7 @@ public class DocumentMenuOperations {
     private final DocumentOperationCallback callback;
 
     public interface DocumentOperationCallback {
-        void onDocumentUpdated();
+
         void onDocumentDeleted(Document document);
         void onDocumentRenamed(Document document);
 
@@ -45,22 +45,16 @@ public class DocumentMenuOperations {
 
         String fileName = document.getName().toLowerCase();
         String filePath = document.getPath();
-
-        Log.d(TAG, "Açılmaya çalışılan dosya: " + filePath);
-        Log.d(TAG, "Dosya türü: " + fileName);
-
         try {
             if (fileName.endsWith(".docx") || fileName.endsWith(".doc") ||
                     fileName.endsWith(".html") || fileName.endsWith(".htm") || fileName.endsWith(".txt")) {
 
                 if (WordDocumentHelper.isValidWordDocument(filePath)) {
-                    Log.d(TAG, "Geçerli Word belgesi, editör açılıyor...");
                     Intent intent = new Intent(context, WordEditorActivity.class);
                     intent.putExtra(WordEditorActivity.EXTRA_FILE_PATH, filePath);
                     intent.putExtra(WordEditorActivity.EXTRA_IS_NEW_DOCUMENT, false);
                     context.startActivity(intent);
                 } else {
-                    Log.e(TAG, "Geçersiz Word belgesi: " + filePath);
                     showToast("Belge açılamadı - dosya bozulmuş olabilir");
                 }
             } else if (fileName.endsWith(".xls") || fileName.endsWith(".xlsx")) {
@@ -70,11 +64,10 @@ public class DocumentMenuOperations {
             } else if (fileName.endsWith(".pdf")) {
                 showToast("PDF görüntüleyici geliştiriliyor...");
             } else {
-                // Sistem editörü ile açmayı dene
+
                 tryOpenWithSystemEditor(document);
             }
         } catch (Exception e) {
-            Log.e(TAG, "Belge açma genel hatası: " + e.getMessage());
             showToast("Belge açılırken hata oluştu: " + e.getMessage());
         }
     }
@@ -98,20 +91,14 @@ public class DocumentMenuOperations {
                 showToast("Bu dosya türü henüz düzenlenemez");
             }
         } catch (Exception e) {
-            Log.e(TAG, "Düzenleme hatası: " + e.getMessage());
             showToast("Düzenleme başlatılamadı: " + e.getMessage());
         }
     }
-
-    /**
-     * Belgeyi paylaşır
-     */
     public void shareDocument(Document document) {
         if (document == null || document.getPath() == null) {
             showToast("Geçersiz belge");
             return;
         }
-
         try {
             Intent shareIntent = new Intent(Intent.ACTION_SEND);
             shareIntent.setType("*/*");
@@ -120,14 +107,10 @@ public class DocumentMenuOperations {
             shareIntent.putExtra(Intent.EXTRA_TEXT, "DocumentMaster ile paylaşılan belge: " + document.getName());
             context.startActivity(Intent.createChooser(shareIntent, "Belgeyi Paylaş"));
         } catch (Exception e) {
-            Log.e(TAG, "Paylaşma hatası: " + e.getMessage());
             showToast("Paylaşma hatası: " + e.getMessage());
         }
     }
 
-    /**
-     * Belgeyi siler (onaylama dialogu ile)
-     */
     public void deleteDocument(Document document) {
         if (document == null || document.getPath() == null) {
             showToast("Geçersiz belge");
@@ -147,9 +130,6 @@ public class DocumentMenuOperations {
                 .show();
     }
 
-    /**
-     * Belgeyi yeniden adlandırır
-     */
     public void renameDocument(Document document) {
         if (document == null || document.getPath() == null) {
             showToast("Geçersiz belge");
@@ -181,9 +161,6 @@ public class DocumentMenuOperations {
                 .show();
     }
 
-    /**
-     * Belge özelliklerini gösterir
-     */
     public void showDocumentProperties(Document document) {
         if (document == null || document.getPath() == null) {
             showToast("Geçersiz belge");
@@ -200,7 +177,6 @@ public class DocumentMenuOperations {
                     document.getName().toLowerCase().endsWith(".txt")) {
                 properties = WordDocumentHelper.getDocumentProperties(document.getPath());
             } else {
-                // Basit dosya özellikleri
                 File file = new File(document.getPath());
                 properties = "📄 Ad: " + document.getName() + "\n" +
                         "🏷️ Tür: " + document.getType() + "\n" +
@@ -223,9 +199,6 @@ public class DocumentMenuOperations {
         }
     }
 
-    /**
-     * Belge menüsünü gösterir
-     */
     public void showDocumentOptionsMenu(Document document) {
         if (document == null) {
             showToast("Geçersiz belge");

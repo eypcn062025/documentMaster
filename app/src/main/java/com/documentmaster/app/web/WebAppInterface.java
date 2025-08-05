@@ -22,21 +22,6 @@ public class WebAppInterface {
         });
     }
 
-    @JavascriptInterface
-    public void onFocus() {
-        mainHandler.post(() -> {
-            if (callback != null) {
-                callback.onEditorFocused();
-            }
-        });
-    }
 
-    @JavascriptInterface
-    public void onBlur() {
-        mainHandler.post(() -> {
-            if (callback != null) {
-                callback.onEditorBlurred();
-            }
-        });
-    }
+
 }

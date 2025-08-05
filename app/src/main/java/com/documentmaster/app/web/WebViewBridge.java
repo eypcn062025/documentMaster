@@ -43,11 +43,6 @@ public class WebViewBridge {
             }
         });
     }
-    public void setHtml(String html) {
-        String js = "setHtml(`" + escapeHtml(html) + "`)";
-        execute(js);
-    }
-
     public void insertImage(String base64Data, String mimeType, String imageName, Runnable onSuccess, Runnable onError) {
         String jsCommand = String.format(
                 "insertImageFromAndroid('%s', '%s', '%s')",
@@ -63,12 +58,6 @@ public class WebViewBridge {
             }
         });
     }
-
-    private String cleanResult(String result) {
-        if (result == null) return "";
-        return result.replaceAll("^\"|\"$", "").replace("\\n", "\n").replace("\\\"", "\"");
-    }
-
 
     private String escapeHtml(String html) {
         if (html == null) return "";
@@ -119,18 +108,13 @@ public class WebViewBridge {
     public void getBestEffortHtml(HtmlCallback callback) {
         webView.evaluateJavascript("getHtmlWithFormats()", formatResult -> {
             if (formatResult != null && !"null".equals(formatResult)) {
-                Log.d("WebViewBridge", "✅ Formatlı HTML alındı");
                 callback.onHtmlReady(formatResult);
             } else {
-                Log.w("WebViewBridge", "⚠️ Formatlı HTML başarısız, resimli deneniyor...");
                 webView.evaluateJavascript("getHtmlWithImages()", imageResult -> {
                     if (imageResult != null && !"null".equals(imageResult)) {
-                        Log.d("WebViewBridge", "✅ Resimli HTML alındı");
                         callback.onHtmlReady(imageResult);
                     } else {
-                        Log.w("WebViewBridge", "⚠️ Resimli HTML başarısız, düz HTML deneniyor...");
                         webView.evaluateJavascript("getHtml()", plainResult -> {
-                            Log.d("WebViewBridge", "✅ Düz HTML alındı");
                             callback.onHtmlReady(plainResult);
                         });
                     }
@@ -143,9 +127,7 @@ public class WebViewBridge {
             try {
                 webView.loadUrl("about:blank");
                 webView.destroy();
-                Log.d("WebViewBridge", "🌐 WebView temizlendi");
             } catch (Exception e) {
-                Log.e("WebViewBridge", "❌ WebView temizleme hatası: " + e.getMessage());
             }
         }
     }
