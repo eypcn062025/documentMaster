@@ -19,10 +19,8 @@ public class DocumentConverter {
         if (paragraph.getText().trim().isEmpty() && paragraph.getRuns().isEmpty()) {
             return "<p><br></p>";
         }
-
         StringBuilder html = new StringBuilder();
         html.append("<p");
-
         ParagraphAlignment alignment = paragraph.getAlignment();
         if (alignment != null) {
             switch (alignment) {
@@ -40,9 +38,7 @@ public class DocumentConverter {
                     break;
             }
         }
-
         html.append(">");
-
         List<XWPFRun> runs = paragraph.getRuns();
         if (runs.isEmpty()) {
             html.append(DocumentUtils.escapeHtml(paragraph.getText()));
@@ -58,7 +54,6 @@ public class DocumentConverter {
                 }
             }
         }
-
         html.append("</p>");
         return html.toString();
     }
@@ -184,8 +179,6 @@ public class DocumentConverter {
 
     public static void parseHtmlToDocxAdvanced(XWPFDocument document, String htmlContent) {
         try {
-            Log.d(TAG, "🔄 Gelişmiş HTML parsing başlıyor...");
-
             String[] parts = splitHtmlContent(htmlContent);
 
             for (String part : parts) {
@@ -230,7 +223,6 @@ public class DocumentConverter {
         Pattern pattern = Pattern.compile("(<p[^>]*>.*?</p>|<table[^>]*>.*?</table>|<img[^>]*[/]?>)",
                 Pattern.DOTALL);
         Matcher matcher = pattern.matcher(html);
-
         int lastEnd = 0;
         while (matcher.find()) {
             if (matcher.start() > lastEnd) {
@@ -239,18 +231,15 @@ public class DocumentConverter {
                     parts.add(between);
                 }
             }
-
             parts.add(matcher.group());
             lastEnd = matcher.end();
         }
-
         if (lastEnd < html.length()) {
             String remaining = html.substring(lastEnd).trim();
             if (!remaining.isEmpty()) {
                 parts.add(remaining);
             }
         }
-
         Log.d(TAG, "📄 HTML " + parts.size() + " parçaya ayrıldı");
         return parts.toArray(new String[0]);
     }
@@ -494,6 +483,36 @@ public class DocumentConverter {
                         }
                         if (color.equals("auto") || color.isEmpty()) {
                             color = null;
+                        }
+                    }
+                }
+
+                if (htmlContent.contains("<font color=\"")) {
+                    Pattern fontColorPattern = Pattern.compile("<font color=\"#([a-fA-F0-9]{6})\"");
+                    Matcher matcher = fontColorPattern.matcher(htmlContent);
+                    if (matcher.find()) {
+                        color = matcher.group(1); // #ff00ff -> ff00ff
+                    }
+                }
+
+                if (htmlContent.contains("<font face=\"")) {
+                    Pattern fontFacePattern = Pattern.compile("<font face=\"([^\"]+)\"");
+                    Matcher matcher = fontFacePattern.matcher(htmlContent);
+                    if (matcher.find()) {
+                        fontFamily = matcher.group(1);
+                    }
+                }
+
+                if (htmlContent.contains("<font size=\"")) {
+                    Pattern fontSizePattern = Pattern.compile("<font size=\"([1-7])\"");
+                    Matcher matcher = fontSizePattern.matcher(htmlContent);
+                    if (matcher.find()) {
+                        int htmlSize = Integer.parseInt(matcher.group(1)); // 1-7
+
+                        // HTML size'ı gerçek pt'ye çevir
+                        int[] ptSizes = {8, 10, 12, 14, 18, 24, 36}; // HTML size 1-7 karşılıkları
+                        if (htmlSize >= 1 && htmlSize <= 7) {
+                            fontSize = ptSizes[htmlSize - 1];
                         }
                     }
                 }

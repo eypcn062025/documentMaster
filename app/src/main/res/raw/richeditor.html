@@ -112,6 +112,36 @@ img:hover {
     border-color: #1976D2;
     box-shadow: 0 2px 8px rgba(25, 118, 210, 0.3);
 }
+
+            /* Font Face Desteği */
+font[face="Arial"] {
+    font-family: Arial !important;
+}
+
+font[face="Times New Roman"] {
+    font-family: "Times New Roman" !important;
+}
+
+font[face="Courier New"] {
+    font-family: "Courier New" !important;
+}
+
+font[face="Georgia"] {
+    font-family: Georgia !important;
+}
+
+font[face="Verdana"] {
+    font-family: Verdana !important;
+}
+
+font[face="Comic Sans MS"] {
+    font-family: "Comic Sans MS" !important;
+}
+
+font[face="Impact"] {
+    font-family: Impact !important;
+}
+
         </style>
     </head>
     <body>
@@ -258,12 +288,24 @@ img:hover {
                 notifyContentChange();
             }
 
-            function setFontName(name) {
-                hidePlaceholder();
-                document.execCommand('fontName', false, name);
-                editor.focus();
-                notifyContentChange();
-            }
+           function setFontName(name) {
+    console.log('🔤 setFontName çağrıldı:', name);
+    hidePlaceholder();
+
+    // Metin seçili mi kontrol et
+    let selection = window.getSelection();
+    console.log('📋 Seçili metin:', selection.toString());
+
+    document.execCommand('fontName', false, name);
+
+    // Sonuç ne oldu?
+    setTimeout(() => {
+        console.log('📝 Font sonrası HTML:', editor.innerHTML);
+    }, 100);
+
+    editor.focus();
+    notifyContentChange();
+}
 
             // Hizalama fonksiyonları
             function setAlignLeft() {

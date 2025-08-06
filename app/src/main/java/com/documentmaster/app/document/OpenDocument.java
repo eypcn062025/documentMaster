@@ -66,16 +66,11 @@ public class OpenDocument {
     public void processSelectedFile(Uri fileUri) {
         try {
             String fileName = FileManagerHelper.getFileNameFromUri(context, fileUri);
-            Log.d(TAG, "Dosya adı: " + fileName);
-
             long fileSize = FileManagerHelper.getFileSizeFromUri(context, fileUri);
-            Log.d(TAG, "Dosya boyutu: " + fileSize + " bytes");
-
             if (fileSize > 50 * 1024 * 1024) {
                 Toast.makeText(context, "Dosya çok büyük. Maksimum 50MB desteklenir.", Toast.LENGTH_LONG).show();
                 return;
             }
-
             if (fileName != null && !isSupportedFile(fileName)) {
                 Toast.makeText(context, "Desteklenmeyen dosya formatı: " + fileName, Toast.LENGTH_LONG).show();
                 return;

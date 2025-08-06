@@ -44,15 +44,15 @@ public class DocumentSaveManager {
             return;
         }
         notifyStarted();
-        webViewBridge.getBestEffortHtml(html -> {
-            saveHtmlToFile(html, currentFilePath);
+        webViewBridge.getHtml(html -> {
             Log.d("deneme",html);
+            saveHtmlToFile(html, currentFilePath);
         });
     }
     private void saveHtmlToFile(String htmlResult, String filePath) {
 
-        String cleanHtml = HtmlUtils.cleanHtmlResultAdvanced(htmlResult);
-
+        String cleanHtml = HtmlUtils.cleanHtmlResult(htmlResult);
+        Log.d("deneme",cleanHtml);
         if (cleanHtml == null || cleanHtml.trim().isEmpty()) {
             notifyResult(false, "❌ İçerik boş - kaydetme iptal edildi");
             return;

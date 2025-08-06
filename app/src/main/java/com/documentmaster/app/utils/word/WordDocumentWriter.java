@@ -14,20 +14,11 @@ public class WordDocumentWriter {
 
     public static boolean saveHtmlToDocx(String filePath, String htmlContent) {
         try {
-            Log.d(TAG, "💾 HTML→DOCX kaydetme başlıyor...");
-            Log.d(TAG, "📝 HTML uzunluğu: " + (htmlContent != null ? htmlContent.length() : 0));
-            Log.d(TAG, "📁 Hedef dosya: " + filePath);
-
             XWPFDocument document = new XWPFDocument();
-
-            String cleanedHtml = DocumentUtils.normalizeHtmlForSaving(htmlContent);
-            Log.d(TAG, "🧹 Temizlenmiş HTML uzunluğu: " + cleanedHtml.length());
-
-            // HTML'i parse et ve DOCX'e çevir
-            DocumentConverter.parseHtmlToDocxAdvanced(document, cleanedHtml);
-
+            Log.d("deneme",htmlContent);
+            DocumentConverter.parseHtmlToDocxAdvanced(document, htmlContent);
             boolean success = saveDocument(document, filePath);
-
+            Log.d("deneme",document.getDocument().toString());
             if (success) {
                 Log.d(TAG, "✅ HTML→DOCX kaydetme başarılı");
             } else {

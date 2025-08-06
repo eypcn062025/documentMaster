@@ -138,40 +138,4 @@ public class DocumentUtils {
                 .trim();
     }
 
-    public static String normalizeHtmlForSaving(String htmlContent) {
-        if (htmlContent == null || htmlContent.trim().isEmpty()) {
-            return "<p>Boş belge</p>";
-        }
-
-        String normalized = htmlContent
-                // Unicode escape karakterlerini decode et
-                .replaceAll("\\\\u003C", "<")
-                .replaceAll("\\\\u003E", ">")
-                .replaceAll("\\\\u0026", "&")
-                .replaceAll("\\\\u0022", "\"")
-                .replaceAll("\\\\u0027", "'")
-                // JavaScript escape karakterlerini temizle
-                .replaceAll("\\\\\"", "\"")
-                .replaceAll("\\\\n", " ")
-                .replaceAll("\\\\r", "")
-                .replaceAll("\\\\/", "/")
-                .replaceAll("\\\\\\\\", "\\\\")
-                // HTML entity'leri decode et
-                .replace("&nbsp;", " ")
-                .replace("&amp;", "&")
-                .replace("&lt;", "<")
-                .replace("&gt;", ">")
-                .replace("&quot;", "\"")
-                .replace("&#39;", "'")
-                // Gereksiz div'leri temizle
-                .replaceAll("<div[^>]*>", "")
-                .replaceAll("</div>", "")
-                // Boş paragrafları düzelt
-                .replaceAll("<p[^>]*>\\s*<br[^>]*>\\s*</p>", "<p> </p>")
-                .replaceAll("<p[^>]*>\\s*</p>", "<p> </p>")
-                .trim();
-
-        Log.d(TAG, "📋 HTML normalizing tamamlandı");
-        return normalized;
-    }
 }

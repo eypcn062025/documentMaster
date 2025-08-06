@@ -46,12 +46,11 @@ public class DocumentLoadManager {
                 WordDocumentHelper.WordContent result = WordDocumentHelper.readWordDocument(currentFilePath);
                 ((android.app.Activity) context).runOnUiThread(() -> {
                     if (result.isSuccess()) {
-                        String htmlContent = HtmlUtils.convertToHtml(result.getContent());
+                        String htmlContent = result.getContent();
+                        Log.d("deneme",htmlContent);
                         File file = new File(currentFilePath);
                         String fileName = file.getName();
-
                         Toast.makeText(context, "Belge yüklendi", Toast.LENGTH_SHORT).show();
-
                         if (callback != null) {
                             callback.onLoadCompleted(true, htmlContent, fileName, null);
                         }
@@ -77,25 +76,14 @@ public class DocumentLoadManager {
         });
     }
 
-
     public void setEditorContent(String content, boolean isWebViewLoaded) {
         if (!isWebViewLoaded || content == null) {
             Log.d(TAG, "WebView hazır değil veya içerik null");
             return;
         }
         try {
-            String cleanContent = HtmlUtils.normalizeHtmlForEditor(content);
-
-            String jsContent = cleanContent
-                    .replace("\\", "\\\\")
-                    .replace("'", "\\'")
-                    .replace("\n", "\\n")
-                    .replace("\r", "");
-
-            String jsCommand = "setHtml('" + jsContent + "')";
-
+            String jsCommand = "setHtml('" + content + "')";
             webViewBridge.executeJS(jsCommand);
-
         } catch (Exception e) {
             Log.e(TAG, "Editöre içerik yükleme hatası: " + e.getMessage());
             webViewBridge.executeJS("setHtml('<p>İçerik yüklenemedi</p>')");

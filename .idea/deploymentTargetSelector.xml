@@ -4,10 +4,10 @@
     <selectionStates>
       <SelectionState runConfigName="app">
         <option name="selectionMode" value="DROPDOWN" />
-        <DropdownSelection timestamp="2025-08-04T11:25:36.402731107Z">
+        <DropdownSelection timestamp="2025-08-06T14:09:29.379125465Z">
           <Target type="DEFAULT_BOOT">
             <handle>
-              <DeviceId pluginId="PhysicalDevice" identifier="serial=S60D41283D205180686" />
+              <DeviceId pluginId="LocalEmulator" identifier="path=/home/eyup/.android/avd/Small_Phone_3.avd" />
             </handle>
           </Target>
         </DropdownSelection>

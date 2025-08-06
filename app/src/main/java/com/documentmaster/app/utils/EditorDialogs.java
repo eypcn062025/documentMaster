@@ -120,22 +120,4 @@ public class EditorDialogs {
                 .setNegativeButton("İptal", null)
                 .show();
     }
-
-    // ========== GETTER METHODS (opsiyonel) ==========
-
-    public String getCurrentTextColor() {
-        return currentTextColor;
-    }
-
-    public String getCurrentFontFamily() {
-        return currentFontFamily;
-    }
-
-    public void setCurrentTextColor(String color) {
-        this.currentTextColor = color;
-    }
-
-    public void setCurrentFontFamily(String fontFamily) {
-        this.currentFontFamily = fontFamily;
-    }
 }

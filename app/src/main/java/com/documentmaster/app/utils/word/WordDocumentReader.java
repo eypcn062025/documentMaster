@@ -36,10 +36,8 @@ public class WordDocumentReader {
     public static WordDocumentHelper.WordContent readDocxDocumentAsHtml(String filePath) {
         try (FileInputStream fis = new FileInputStream(filePath);
              XWPFDocument document = new XWPFDocument(fis)) {
-
             StringBuilder htmlContent = new StringBuilder();
             htmlContent.append("<div>");
-
             List<IBodyElement> bodyElements = document.getBodyElements();
 
             for (IBodyElement element : bodyElements) {
@@ -51,13 +49,8 @@ public class WordDocumentReader {
                     htmlContent.append(DocumentConverter.convertTableToHtml(table));
                 }
             }
-
             htmlContent.append("</div>");
             String finalHtml = htmlContent.toString();
-
-            Log.d(TAG, "DOCX → HTML dönüştürüldü: " + filePath);
-            Log.d(TAG, "HTML içeriği: " + finalHtml.substring(0, Math.min(200, finalHtml.length())));
-
             return new WordDocumentHelper.WordContent(finalHtml, true, null);
 
         } catch (Exception e) {

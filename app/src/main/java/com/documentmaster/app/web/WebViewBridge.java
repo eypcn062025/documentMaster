@@ -105,23 +105,6 @@ public class WebViewBridge {
         void onHtmlReady(String html);
     }
 
-    public void getBestEffortHtml(HtmlCallback callback) {
-        webView.evaluateJavascript("getHtmlWithFormats()", formatResult -> {
-            if (formatResult != null && !"null".equals(formatResult)) {
-                callback.onHtmlReady(formatResult);
-            } else {
-                webView.evaluateJavascript("getHtmlWithImages()", imageResult -> {
-                    if (imageResult != null && !"null".equals(imageResult)) {
-                        callback.onHtmlReady(imageResult);
-                    } else {
-                        webView.evaluateJavascript("getHtml()", plainResult -> {
-                            callback.onHtmlReady(plainResult);
-                        });
-                    }
-                });
-            }
-        });
-    }
     public void destroyWebView() {
         if (webView != null) {
             try {
