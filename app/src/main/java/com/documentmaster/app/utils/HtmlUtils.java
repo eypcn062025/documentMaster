@@ -43,10 +43,6 @@ public class HtmlUtils {
                 .replace("&quot;", "\"")
                 .replace("&#39;", "'");
 
-        Log.d("WordEditor", "✅ Temizlenmiş sonuç uzunluğu: " + cleaned.length());
-        Log.d("WordEditor", "📝 Temizlenmiş içerik örneği: " +
-                cleaned.substring(0, Math.min(150, cleaned.length())));
-
         return cleaned;
     }
 
@@ -57,7 +53,7 @@ public class HtmlUtils {
         }
 
         String cleaned = result.trim();
-        Log.d(TAG, "🔄 Ham sonuç uzunluğu: " + cleaned.length());
+
 
         if (cleaned.startsWith("\"") && cleaned.endsWith("\"")) {
             cleaned = cleaned.substring(1, cleaned.length() - 1);
@@ -87,12 +83,11 @@ public class HtmlUtils {
 
         cleaned = cleanHtmlPreservingImages(cleaned);
 
-        Log.d(TAG, "✅ Gelişmiş temizleme tamamlandı - Son uzunluk: " + cleaned.length());
         return cleaned;
     }
 
     private static String cleanHtmlPreservingImages(String html) {
-        // Resim verilerini geçici olarak sakla
+
         java.util.Map<String, String> imageMap = new java.util.HashMap<>();
         Pattern imagePattern = Pattern.compile("data:image/[^;]+;base64,[A-Za-z0-9+/=]+");
         Matcher imageMatcher = imagePattern.matcher(html);
@@ -109,12 +104,10 @@ public class HtmlUtils {
         }
         imageMatcher.appendTail(sb);
 
-        // HTML'i temizle
         String cleanedHtml = sb.toString()
                 .replaceAll("\\s+", " ")  // Çoklu boşlukları tek boşluğa çevir
                 .trim();
 
-        // Resimleri geri koy
         for (java.util.Map.Entry<String, String> entry : imageMap.entrySet()) {
             cleanedHtml = cleanedHtml.replace(entry.getKey(), entry.getValue());
         }

@@ -30,7 +30,6 @@ public class DocumentSaveManager {
         void onContentChanged(boolean isChanged);
         void onFilePathChanged(String newFilePath, String fileName);
     }
-
     public DocumentSaveManager(Context context, WebViewBridge webViewBridge,
                                ExecutorService executorService, SaveCallback callback) {
         this.context = context;
@@ -40,26 +39,51 @@ public class DocumentSaveManager {
     }
 
     public void saveDocument(String currentFilePath, boolean isNewDocument) {
-        if (isNewDocument) {
+        if (isNewDocument || currentFilePath == null || currentFilePath.isEmpty()) {
             saveDocumentAs(currentFilePath);
             return;
         }
-        if (executorService == null || currentFilePath == null || currentFilePath.isEmpty()) {
-            showMessage("❌ Kaydetme hatası - dosya yolu bulunamadı");
+        notifyStarted();
+        webViewBridge.getBestEffortHtml(html -> {
+            saveHtmlToFile(html, currentFilePath);
+            Log.d("deneme",html);
+        });
+    }
+    private void saveHtmlToFile(String htmlResult, String filePath) {
+
+        String cleanHtml = HtmlUtils.cleanHtmlResultAdvanced(htmlResult);
+
+        if (cleanHtml == null || cleanHtml.trim().isEmpty()) {
+            notifyResult(false, "❌ İçerik boş - kaydetme iptal edildi");
             return;
         }
-        if (callback != null) {
-            callback.onSaveStarted();
-        }
+        executorService.execute(() -> {
+            try {
+                boolean success = WordDocumentHelper.saveHtmlToDocx(filePath, cleanHtml);
 
-        webViewBridge.getBestEffortHtml(html -> processSaveResult(html, currentFilePath));
+                ((android.app.Activity) context).runOnUiThread(() -> {
+                    if (success) {
+                        notifyResult(true, "✅ Belge kaydedildi!");
+                        markContentAsUnchanged();
+                    } else {
+                        notifyResult(false, "❌ Belge kaydedilemedi");
+                    }
+                });
+            } catch (Exception e) {
+                ((android.app.Activity) context).runOnUiThread(() -> {
+                    notifyResult(false, "❌ Kaydetme hatası: " + e.getMessage());
+                });
+            }
+        });
+    }
+    //-----------------saveDocumentAs------------------------//
+    public void saveDocumentAs(String currentFilePath) {
+        showSaveAsDialog(currentFilePath);
     }
 
-    public void saveDocumentAs(String currentFilePath) {
+    private void showSaveAsDialog(String currentFilePath) {
         View dialogView = ((android.app.Activity) context).getLayoutInflater().inflate(R.layout.dialog_save_as, null);
         EditText editFileName = dialogView.findViewById(R.id.editFileName);
-
-        // Mevcut dosya adını doldur
         if (currentFilePath != null) {
             File currentFile = new File(currentFilePath);
             String nameWithoutExtension = currentFile.getName().replaceFirst("[.][^.]+$", "");
@@ -72,7 +96,7 @@ public class DocumentSaveManager {
                 .setPositiveButton("Kaydet", (dialog, which) -> {
                     String fileName = editFileName.getText().toString().trim();
                     if (!TextUtils.isEmpty(fileName)) {
-                        performSaveAs(fileName);
+                        saveAsNewFile(fileName);
                     } else {
                         showMessage("Dosya adı boş olamaz");
                     }
@@ -80,168 +104,73 @@ public class DocumentSaveManager {
                 .setNegativeButton("İptal", null)
                 .show();
     }
-
-    // ========== PRIVATE METHODS ==========
-
-    private void processSaveResult(String result, String currentFilePath) {
-        String htmlContent = HtmlUtils.cleanHtmlResultAdvanced(result);
-        Log.d(TAG, "🧹 Temizlenmiş HTML uzunluğu: " +
-                (htmlContent != null ? htmlContent.length() : 0));
-
-        if (htmlContent == null || htmlContent.trim().isEmpty()) {
-            if (callback != null) {
-                callback.onSaveCompleted(false, "❌ İçerik boş - kaydetme iptal edildi");
-            }
-            return;
+    private void saveAsNewFile(String fileName) {
+        if (!fileName.endsWith(".docx")) {
+            fileName += ".docx";
         }
-
-        int imageCount = HtmlUtils.countImagesInHtml(htmlContent);
-        Log.d(TAG, "🖼️ HTML'de " + imageCount + " resim bulundu");
-
-        executorService.execute(() -> {
-            try {
-                Log.d(TAG, "💾 DOCX kaydetme işlemi başlıyor...");
-
-                File originalFile = new File(currentFilePath);
-                File backupFile = new File(currentFilePath + ".backup");
-
-                // Yedek oluştur
-                if (originalFile.exists()) {
-                    try {
-                        FileUtils.copyFile(originalFile, backupFile);
-                        Log.d(TAG, "🔒 Yedek oluşturuldu");
-                    } catch (Exception e) {
-                        Log.w(TAG, "⚠️ Yedekleme hatası: " + e.getMessage());
-                    }
-                }
-
-                long startTime = System.currentTimeMillis();
-                boolean success = WordDocumentHelper.saveHtmlToDocx(currentFilePath, htmlContent);
-                long endTime = System.currentTimeMillis();
-
-                Log.d(TAG, "⏱️ Kaydetme süresi: " + (endTime - startTime) + "ms");
-
-                ((android.app.Activity) context).runOnUiThread(() -> {
-                    if (success) {
-                        handleSaveSuccess(backupFile, htmlContent, imageCount, currentFilePath);
-                    } else {
-                        handleSaveFailure(backupFile);
-                    }
-                });
-
-            } catch (Exception e) {
-                Log.e(TAG, "❌ Kaydetme exception: " + e.getMessage(), e);
-                ((android.app.Activity) context).runOnUiThread(() -> {
-                    if (callback != null) {
-                        callback.onSaveCompleted(false, "❌ Kaydetme hatası: " + e.getMessage());
-                    }
-                });
-            }
-        });
-    }
-
-    private void performSaveAs(String fileName) {
-        if (executorService == null) {
-            showMessage("Sistem hatası");
-            return;
-        }
-
-        String finalFileName = fileName;
-        if (!finalFileName.endsWith(".docx")) {
-            finalFileName += ".docx";
-        }
-
         File documentsDir = new File(context.getFilesDir(), "Documents");
         if (!documentsDir.exists()) {
             documentsDir.mkdirs();
         }
-
-        String newFilePath = new File(documentsDir, finalFileName).getAbsolutePath();
-        final String fileNameToSave = finalFileName;
-
-        if (callback != null) {
-            callback.onSaveStarted();
-        }
-
-        webViewBridge.getHtml(result -> {
-            String htmlContent = HtmlUtils.cleanHtmlResult(result);
-
-            executorService.execute(() -> {
-                try {
-                    boolean success = WordDocumentHelper.saveHtmlToDocx(newFilePath, htmlContent);
-
-                    ((android.app.Activity) context).runOnUiThread(() -> {
-                        if (success) {
-                            // Başarılı save as
-                            if (callback != null) {
-                                callback.onSaveCompleted(true, "Belge kaydedildi: " + fileNameToSave);
-                                callback.onFilePathChanged(newFilePath, fileNameToSave);
-                                callback.onContentChanged(false); // İçerik değişmedi artık
-                            }
-                        } else {
-                            if (callback != null) {
-                                callback.onSaveCompleted(false, "Belge kaydedilemedi");
-                            }
-                        }
-                    });
-                } catch (Exception e) {
-                    ((android.app.Activity) context).runOnUiThread(() -> {
-                        if (callback != null) {
-                            callback.onSaveCompleted(false, "Kaydetme hatası: " + e.getMessage());
-                        }
-                    });
-                }
-            });
+        String newFilePath = new File(documentsDir, fileName).getAbsolutePath();
+        final String finalFileName = fileName;
+        notifyStarted();
+        webViewBridge.getHtml(htmlResult -> {
+            saveHtmlToFileAs(htmlResult, newFilePath, finalFileName);
         });
     }
 
-    private void handleSaveSuccess(File backupFile, String htmlContent, int imageCount, String currentFilePath) {
-        File savedFile = new File(currentFilePath);
-
-        if (savedFile.exists() && savedFile.length() > 0) {
-            String message = "✅ Belge kaydedildi!";
-            if (imageCount > 0) {
-                message += " (" + imageCount + " resim dahil)";
-            }
-
-            Log.d(TAG, "✅ Kaydetme başarılı - Dosya: " + savedFile.length() + " bytes");
-
-            // Yedek dosyayı sil
-            if (backupFile.exists()) {
-                backupFile.delete();
-            }
-
-            if (callback != null) {
-                callback.onSaveCompleted(true, message);
-                callback.onContentChanged(false); // İçerik değişmedi artık
-            }
-
-        } else {
-            handleSaveFailure(backupFile);
+    private void saveHtmlToFileAs(String htmlResult, String newFilePath, String fileName) {
+        String cleanHtml = HtmlUtils.cleanHtmlResult(htmlResult);
+        if (cleanHtml == null || cleanHtml.trim().isEmpty()) {
+            notifyResult(false, "❌ İçerik boş - kaydetme iptal edildi");
+            return;
         }
-    }
-
-    private void handleSaveFailure(File backupFile) {
-        Log.e(TAG, "❌ Kaydetme başarısız - dosya oluşmadı");
-
-        // Yedekten geri yükle
-        if (backupFile.exists()) {
+        executorService.execute(() -> {
             try {
-                File originalFile = new File(backupFile.getParent(),
-                        backupFile.getName().replace(".backup", ""));
-                FileUtils.copyFile(backupFile, originalFile);
-                backupFile.delete();
-                Log.d(TAG, "🔄 Yedekten geri yüklendi");
-            } catch (Exception e) {
-                Log.e(TAG, "❌ Geri yükleme hatası: " + e.getMessage());
-            }
-        }
+                boolean success = WordDocumentHelper.saveHtmlToDocx(newFilePath, cleanHtml);
 
+                ((android.app.Activity) context).runOnUiThread(() -> {
+                    if (success) {
+                        notifyResult(true, "✅ Belge kaydedildi: " + fileName);
+                        notifyFilePathChanged(newFilePath, fileName);
+                        markContentAsUnchanged();
+                    } else {
+                        notifyResult(false, "❌ Belge kaydedilemedi");
+                    }
+                });
+
+            } catch (Exception e) {
+                ((android.app.Activity) context).runOnUiThread(() -> {
+                    notifyResult(false, "❌ Kaydetme hatası: " + e.getMessage());
+                });
+            }
+        });
+    }
+
+    private void notifyFilePathChanged(String newFilePath, String fileName) {
         if (callback != null) {
-            callback.onSaveCompleted(false, "❌ Belge kaydedilemedi - lütfen tekrar deneyin");
+            callback.onFilePathChanged(newFilePath, fileName);
         }
     }
+
+    private void notifyResult(boolean success, String message) {
+        if (callback != null) {
+            callback.onSaveCompleted(success, message);
+        }
+    }
+    private void markContentAsUnchanged() {
+        if (callback != null) {
+            callback.onContentChanged(false);
+        }
+    }
+
     private void showMessage(String message) {
         Toast.makeText(context, message, Toast.LENGTH_SHORT).show();
+    }
+    private void notifyStarted() {
+        if (callback != null) {
+            callback.onSaveStarted();
+        }
     }
 }
